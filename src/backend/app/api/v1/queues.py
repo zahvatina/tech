@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
+from app.api.deps import get_db, require_api_key
 from app.mapping import platform_db_to_ui, ticket_status_db_to_ui
+from app.schemas.queues import QueueResolve, QueueTake
 
 router = APIRouter(prefix="/queues", tags=["queues"])
 
@@ -99,3 +100,137 @@ async def queue_items(
             }
         )
     return {"data": items}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+async def _resolve_queue_id(session: AsyncSession, code: str):
+    qid = (
+        await session.execute(text("SELECT id FROM queues WHERE code = :c"), {"c": code})
+    ).scalar_one_or_none()
+    if not qid:
+        raise HTTPException(404, "QUEUE_NOT_FOUND")
+    return qid
+
+
+async def _resolve_item(session: AsyncSession, qid, item_id: str) -> str:
+    iid = (
+        await session.execute(
+            text("SELECT id FROM queue_items WHERE id = CAST(:iid AS uuid) AND queue_id = CAST(:qid AS uuid)"),
+            {"iid": item_id, "qid": str(qid)},
+        )
+    ).scalar_one_or_none()
+    if not iid:
+        raise HTTPException(404, "ITEM_NOT_FOUND")
+    return str(iid)
+
+
+# ---------------------------------------------------------------------------
+# POST /{code}/items/{item_id}/take — atomic claim
+# ---------------------------------------------------------------------------
+
+@router.post("/{code}/items/{item_id}/take", dependencies=[Depends(require_api_key)])
+async def take_item(
+    code: str,
+    item_id: str,
+    body: QueueTake,
+    session: AsyncSession = Depends(get_db),
+):
+    qid = await _resolve_queue_id(session, code)
+    await _resolve_item(session, qid, item_id)
+
+    # Atomic UPDATE: succeeds only if status is still 'pending'
+    res = await session.execute(
+        text(
+            """UPDATE queue_items
+               SET status = 'in_progress',
+                   assigned_to = CAST(:uid AS uuid),
+                   assigned_at = NOW(),
+                   updated_at  = NOW()
+               WHERE id = CAST(:iid AS uuid)
+                 AND queue_id = CAST(:qid AS uuid)
+                 AND status = 'pending'
+               RETURNING id::text, assigned_at"""
+        ),
+        {"uid": body.assigned_to, "iid": item_id, "qid": str(qid)},
+    )
+    row = res.fetchone()
+    if not row:
+        raise HTTPException(409, "ALREADY_TAKEN")
+
+    await session.commit()
+    return {
+        "data": {
+            "id": row[0],
+            "status": "in_progress",
+            "assigned_to": body.assigned_to,
+            "assigned_at": row[1].isoformat(),
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /{code}/items/{item_id}/resolve — complete item
+# ---------------------------------------------------------------------------
+
+@router.post("/{code}/items/{item_id}/resolve", dependencies=[Depends(require_api_key)])
+async def resolve_item(
+    code: str,
+    item_id: str,
+    body: QueueResolve,
+    session: AsyncSession = Depends(get_db),
+):
+    qid = await _resolve_queue_id(session, code)
+    await _resolve_item(session, qid, item_id)
+
+    res = await session.execute(
+        text(
+            """UPDATE queue_items
+               SET status      = 'completed',
+                   resolution  = :note,
+                   resolved_at = NOW(),
+                   updated_at  = NOW()
+               WHERE id = CAST(:iid AS uuid)
+                 AND queue_id = CAST(:qid AS uuid)
+                 AND status IN ('pending', 'in_progress')
+               RETURNING id::text, resolved_at"""
+        ),
+        {"note": body.resolution_note, "iid": item_id, "qid": str(qid)},
+    )
+    row = res.fetchone()
+    if not row:
+        raise HTTPException(422, "CANNOT_RESOLVE")
+
+    await session.commit()
+    return {"data": {"id": row[0], "status": "completed", "resolved_at": row[1].isoformat()}}
+
+
+# ---------------------------------------------------------------------------
+# POST /{code}/items/{item_id}/skip — return to pending
+# ---------------------------------------------------------------------------
+
+@router.post("/{code}/items/{item_id}/skip", dependencies=[Depends(require_api_key)])
+async def skip_item(
+    code: str,
+    item_id: str,
+    session: AsyncSession = Depends(get_db),
+):
+    qid = await _resolve_queue_id(session, code)
+    await _resolve_item(session, qid, item_id)
+
+    await session.execute(
+        text(
+            """UPDATE queue_items
+               SET status      = 'pending',
+                   assigned_to = NULL,
+                   assigned_at = NULL,
+                   updated_at  = NOW()
+               WHERE id = CAST(:iid AS uuid)
+                 AND queue_id = CAST(:qid AS uuid)"""
+        ),
+        {"iid": item_id, "qid": str(qid)},
+    )
+    await session.commit()
+    return {"data": {"id": item_id, "status": "pending"}}

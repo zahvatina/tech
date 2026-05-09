@@ -69,6 +69,46 @@ function normTask(t) {
 }
 
 const API = {
+  queues: {
+    async list() {
+      const res = await apiFetch("/api/v1/queues");
+      return res.data || [];
+    },
+    async items(code, params = {}) {
+      const res = await apiFetch(`/api/v1/queues/${encodeURIComponent(code)}/items${buildQS(params)}`);
+      return res.data || [];
+    },
+    async take(code, itemId, assignedTo) {
+      return apiFetch(
+        `/api/v1/queues/${encodeURIComponent(code)}/items/${encodeURIComponent(itemId)}/take`,
+        { method: "POST", body: JSON.stringify({ assigned_to: assignedTo }) },
+      );
+    },
+    async resolve(code, itemId, resolutionNote) {
+      return apiFetch(
+        `/api/v1/queues/${encodeURIComponent(code)}/items/${encodeURIComponent(itemId)}/resolve`,
+        { method: "POST", body: JSON.stringify({ resolution_note: resolutionNote }) },
+      );
+    },
+    async skip(code, itemId) {
+      return apiFetch(
+        `/api/v1/queues/${encodeURIComponent(code)}/items/${encodeURIComponent(itemId)}/skip`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+    },
+  },
+
+  tickets: {
+    async list(params = {}) {
+      const res = await apiFetch(`/api/v1/tickets${buildQS({ limit: 100, ...params })}`);
+      return { data: res.data || [], meta: res.meta || {} };
+    },
+    async get(id) {
+      const res = await apiFetch(`/api/v1/tickets/${encodeURIComponent(id)}`);
+      return res.data || res;
+    },
+  },
+
   problems: {
     async list(filters = {}) {
       const q = {};
@@ -104,6 +144,10 @@ const API = {
     async list(problemId, params = {}) {
       const q = { problem_id: problemId, limit: 100, ...params };
       const res = await apiFetch(`/api/v1/tasks${buildQS(q)}`);
+      return (res.data || []).map(normTask);
+    },
+    async listAll(params = {}) {
+      const res = await apiFetch(`/api/v1/tasks${buildQS({ limit: 100, ...params })}`);
       return (res.data || []).map(normTask);
     },
   },
