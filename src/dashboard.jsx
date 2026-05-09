@@ -5,7 +5,13 @@
 const sumBy = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
 
 const Dashboard = ({ go }) => {
-  const total = PROBLEMS;
+  const [problems, setProblems] = React.useState(PROBLEMS);
+  React.useEffect(() => {
+    API.problems.list({ limit: 100 })
+      .then(res => setProblems(res.data))
+      .catch(() => setProblems(PROBLEMS));
+  }, []);
+  const total = problems;
   const totalTickets = sumBy(total, p => p.tickets);
   const totalUntriaged = sumBy(total, p => p.untriaged);
   const totalNoBug = sumBy(total, p => p.ticketsNoBug);

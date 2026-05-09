@@ -8,12 +8,24 @@ const PROBLEM_FILTERS_DEFAULTS = {
 const ProblemList = ({ go }) => {
   const [filters, setFilters] = React.useState(PROBLEM_FILTERS_DEFAULTS);
   const [selected, setSelected] = React.useState(new Set());
+  const [problems, setProblems] = React.useState(PROBLEMS);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    API.problems.list({ limit: 100 })
+      .then(res => { if (!cancelled) setProblems(res.data); })
+      .catch(() => { if (!cancelled) setProblems(PROBLEMS); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const set = (k, v) => setFilters(f => ({ ...f, [k]: v }));
   const reset = () => setFilters(PROBLEM_FILTERS_DEFAULTS);
 
   const filtered = React.useMemo(() => {
-    let arr = PROBLEMS.filter(p => {
+    let arr = problems.filter(p => {
       if (filters.status !== "all" && p.status !== filters.status) return false;
       if (filters.priority !== "all" && p.priority !== filters.priority) return false;
       if (filters.product !== "all" && !p.products.includes(filters.product)) return false;
@@ -61,7 +73,7 @@ const ProblemList = ({ go }) => {
         <div className="row">
           <div className="grow">
             <h1>Проблемы</h1>
-            <div className="desc">{filtered.length} из {PROBLEMS.length} · обновляется в реальном времени</div>
+            <div className="desc">{filtered.length} из {problems.length}{loading ? " · загрузка…" : " · обновляется в реальном времени"}</div>
           </div>
           <div className="row">
             <div className="row" style={{ background: "var(--bg-elev)", border: "1px solid var(--line)", borderRadius: 6, padding: 2 }}>

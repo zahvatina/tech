@@ -1,13 +1,30 @@
 /* VECTOR — Problem detail page */
 
 const ProblemDetail = ({ problemId, route, go }) => {
-  const p = PROBLEMS.find(p => p.id === problemId);
+  const [p, setP] = React.useState(PROBLEMS.find(x => x.id === problemId) || null);
+  const [bugs, setBugs] = React.useState(p ? BUGS.filter(b => b.problemId === problemId) : []);
   const [tab, setTab] = React.useState(route.tab || "overview");
+
   React.useEffect(() => { if (route.tab) setTab(route.tab); }, [route.tab]);
 
-  if (!p) return <div className="empty">Проблема не найдена</div>;
+  React.useEffect(() => {
+    let cancelled = false;
+    API.problems.get(problemId)
+      .then(data => { if (!cancelled) setP(data); })
+      .catch(() => {
+        const mock = PROBLEMS.find(x => x.id === problemId);
+        if (!cancelled) setP(mock || null);
+      });
+    API.tasks.list(problemId)
+      .then(tasks => { if (!cancelled) setBugs(tasks); })
+      .catch(() => {
+        if (!cancelled) setBugs(BUGS.filter(b => b.problemId === problemId));
+      });
+    return () => { cancelled = true; };
+  }, [problemId]);
 
-  const bugs = BUGS.filter(b => b.problemId === p.id);
+  if (!p) return <div className="empty">Загрузка…</div>;
+
   const tickets = TICKETS.filter(t => t.problemId === p.id);
   const noBugTickets = tickets.filter(t => !t.bugId);
 
@@ -64,7 +81,13 @@ const ProblemDetail = ({ problemId, route, go }) => {
           <div className="k">Статус</div><div className="v"><StatusBadge status={p.status}/></div>
           <div className="k">Приоритет</div><div className="v"><PriorityBadge p={p.priority}/></div>
           <div className="k">Severity</div><div className="v"><SeverityBadge s={p.severity}/></div>
-          <div className="k">Owner</div><div className="v">{p.owner ? <><Avatar user={p.owner} size="sm"/> <span>{userById(p.owner).name}</span></> : <span className="bdg bdg-mute">не назначен</span>}</div>
+          <div className="k">Owner</div><div className="v">{(() => {
+            const u = p.owner ? userById(p.owner) : null;
+            const name = u ? u.name : (p.owner_name || null);
+            return name
+              ? <><Avatar user={p.owner} size="sm"/> <span>{name}</span></>
+              : <span className="bdg bdg-mute">не назначен</span>;
+          })()}</div>
           <div className="k">Watchers</div><div className="v"><AvatarStack ids={["u1","u2","u3","u5","u6","u8"]} max={5}/></div>
           <div className="k">Создано</div><div className="v faint">{p.created}</div>
           <div className="k">Обновлено</div><div className="v faint">{relTime(p.lastUpdate)}</div>
