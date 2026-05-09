@@ -491,3 +491,55 @@ $$;
 CREATE TRIGGER trg_task_jira_flag
 AFTER INSERT OR UPDATE OF jira_url ON tasks
 FOR EACH ROW EXECUTE FUNCTION update_problem_jira_flag();
+
+-- ---------------------------------------------------------------------------
+-- Short ID generation (spec §2, CTO-addendum §2)
+
+CREATE TABLE id_sequences (
+  entity_type VARCHAR(20) PRIMARY KEY,
+  last_value  BIGINT NOT NULL DEFAULT 0
+);
+INSERT INTO id_sequences (entity_type) VALUES ('problem'), ('task'), ('ticket');
+
+CREATE OR REPLACE FUNCTION next_short_id(p_entity_type VARCHAR)
+RETURNS VARCHAR LANGUAGE plpgsql AS $$
+DECLARE
+  next_val BIGINT;
+  prefix   VARCHAR(10);
+BEGIN
+  UPDATE id_sequences
+  SET last_value = last_value + 1
+  WHERE entity_type = p_entity_type
+  RETURNING last_value INTO next_val;
+
+  prefix := CASE p_entity_type
+    WHEN 'problem' THEN 'PROB'
+    WHEN 'task'    THEN 'TASK'
+    WHEN 'ticket'  THEN 'TKT'
+    ELSE UPPER(p_entity_type)
+  END;
+  RETURN prefix || '-' || next_val::TEXT;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION set_short_id()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.short_id IS NULL OR NEW.short_id = '' THEN
+    NEW.short_id := next_short_id(TG_ARGV[0]);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_problems_short_id
+BEFORE INSERT ON problems
+FOR EACH ROW EXECUTE FUNCTION set_short_id('problem');
+
+CREATE TRIGGER trg_tasks_short_id
+BEFORE INSERT ON tasks
+FOR EACH ROW EXECUTE FUNCTION set_short_id('task');
+
+CREATE TRIGGER trg_tickets_short_id
+BEFORE INSERT ON support_tickets
+FOR EACH ROW EXECUTE FUNCTION set_short_id('ticket');

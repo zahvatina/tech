@@ -1,311 +1,776 @@
--- Mock data for dev (run after 01_schema.sql)
+-- Generated seed: VECTOR / RMO — all mock data from frontend prototype
+-- teams=8  products=4  users=8  problems=10  tasks/bugs=11  tickets≈180
 SET client_min_messages = WARNING;
 
--- ---------------------------------------------------------------------------
 INSERT INTO app_settings (key, value) VALUES
-  ('ai_confidence_threshold', '{"problem": 0.9, "task": 0.9, "duplicate": 0.9}'::jsonb),
-  ('triage_sla_hours', '{"default": 24}'::jsonb),
-  ('priority_recalc', '{"delta_critical": 200, "delta_high": 100, "delta_medium": 50, "min_tickets_critical": 50, "min_tickets_high": 20}'::jsonb),
-  ('file_upload', '{"max_size_mb": 50, "allowed_mime_types": ["image/png","application/pdf"]}'::jsonb);
+  ('ai_confidence_threshold', '{"problem":0.9,"task":0.9,"duplicate":0.9}'::jsonb),
+  ('triage_sla_hours',        '{"default":24}'::jsonb),
+  ('priority_recalc',         '{"delta_critical":200,"delta_high":100,"delta_medium":50,"min_tickets_critical":50,"min_tickets_high":20}'::jsonb),
+  ('file_upload',             '{"max_size_mb":50,"allowed_mime_types":["image/png","image/jpeg","application/pdf","text/plain","application/zip"]}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO teams (id, name, slug, color, jira_project_key, email_list) VALUES
-  ('10000000-0000-4000-8000-000001000001', 'Mobile Core', 'mobile-core', '#3B82F6', 'MOB', ARRAY['mobile@example.com']),
-  ('10000000-0000-4000-8000-000001000002', 'Payments', 'payments', '#10B981', 'PAY', ARRAY['payments@example.com']);
+  ('10000000-0000-4000-8000-000000000001','Mobile Core','mobile-core','#3B82F6','MOB',ARRAY['mobile-core@sbr.example']),
+  ('10000000-0000-4000-8000-000000000002','Web Platform','web-platform','#8B5CF6','WEB',ARRAY['web@sbr.example']),
+  ('10000000-0000-4000-8000-000000000003','Payments','payments','#10B981','PAY',ARRAY['payments@sbr.example']),
+  ('10000000-0000-4000-8000-000000000004','Auth & Identity','auth-identity','#F59E0B','AUTH',ARRAY['auth@sbr.example']),
+  ('10000000-0000-4000-8000-000000000005','Policy Service','policy-service','#EF4444','POL',ARRAY['policy@sbr.example']),
+  ('10000000-0000-4000-8000-000000000006','Document Hub','document-hub','#6366F1','DOC',ARRAY['docs@sbr.example']),
+  ('10000000-0000-4000-8000-000000000007','Analytics','analytics','#14B8A6','AN',ARRAY['analytics@sbr.example']),
+  ('10000000-0000-4000-8000-000000000008','Notifications','notifications','#F97316','NTF',ARRAY['ntf@sbr.example']);
 
 INSERT INTO products (id, name, code) VALUES
-  ('20000000-0000-4000-8000-000002000001', 'ОСАГО', 'osago'),
-  ('20000000-0000-4000-8000-000002000002', 'КАСКО', 'kasko'),
-  ('20000000-0000-4000-8000-000002000003', 'НС', 'ns'),
-  ('20000000-0000-4000-8000-000002000004', 'ДМС', 'dms');
+  ('20000000-0000-4000-8000-000000000001','ОСАГО','osago'),
+  ('20000000-0000-4000-8000-000000000002','КАСКО','kasko'),
+  ('20000000-0000-4000-8000-000000000003','НС','ns'),
+  ('20000000-0000-4000-8000-000000000004','ДМС','dms');
 
 INSERT INTO users (id, email, name, role, team_id) VALUES
-  ('30000000-0000-4000-8000-000003000001', 'anna.ops@example.com', 'Анна Котова', 'operator', '10000000-0000-4000-8000-000001000001'),
-  ('30000000-0000-4000-8000-000003000002', 'dmitry.dev@example.com', 'Дмитрий Орлов', 'developer', '10000000-0000-4000-8000-000001000001'),
-  ('30000000-0000-4000-8000-000003000003', 'maria.ops@example.com', 'Мария Зайцева', 'operator', '10000000-0000-4000-8000-000001000002'),
-  ('30000000-0000-4000-8000-000003000004', 'ilya.dev@example.com', 'Илья Громов', 'developer', '10000000-0000-4000-8000-000001000002'),
-  ('30000000-0000-4000-8000-000003000005', 'admin@example.com', 'Администратор', 'admin', NULL),
-  ('30000000-0000-4000-8000-000003000006', 'viewer@example.com', 'Только просмотр', 'viewer', NULL);
+  ('30000000-0000-4000-8000-000000000001','anna.kotova@sbr.example','Анна Котова','operator','10000000-0000-4000-8000-000000000001'),
+  ('30000000-0000-4000-8000-000000000002','dmitry.orlov@sbr.example','Дмитрий Орлов','developer','10000000-0000-4000-8000-000000000006'),
+  ('30000000-0000-4000-8000-000000000003','maria.zaitseva@sbr.example','Мария Зайцева','operator','10000000-0000-4000-8000-000000000003'),
+  ('30000000-0000-4000-8000-000000000004','ilya.gromov@sbr.example','Илья Громов','developer','10000000-0000-4000-8000-000000000003'),
+  ('30000000-0000-4000-8000-000000000005','olga.petrova@sbr.example','Ольга Петрова','operator','10000000-0000-4000-8000-000000000004'),
+  ('30000000-0000-4000-8000-000000000006','sergei.belov@sbr.example','Сергей Белов','developer','10000000-0000-4000-8000-000000000007'),
+  ('30000000-0000-4000-8000-000000000007','nikita.volkov@sbr.example','Никита Волков','operator','10000000-0000-4000-8000-000000000006'),
+  ('30000000-0000-4000-8000-000000000008','elena.sokolova@sbr.example','Елена Соколова','operator','10000000-0000-4000-8000-000000000001');
 
 INSERT INTO queues (id, code, name, sla_minutes) VALUES
-  ('70000000-0000-4000-8000-000007000001', 'problem_determination', 'Определение проблемы', 60),
-  ('70000000-0000-4000-8000-000007000002', 'task_determination', 'Определение задачи/бага', 90),
-  ('70000000-0000-4000-8000-000007000003', 'recommendation_review', 'Контроль отправки рекомендации', 30),
-  ('70000000-0000-4000-8000-000007000004', 'client_response', 'Ответ клиенту', 120);
+  ('70000000-0000-4000-8000-000000000001','problem_determination','Определение проблемы',60),
+  ('70000000-0000-4000-8000-000000000002','task_determination','Определение задачи/бага',90),
+  ('70000000-0000-4000-8000-000000000003','recommendation_review','Контроль отправки рекомендации',30),
+  ('70000000-0000-4000-8000-000000000004','client_response','Ответ клиенту',120);
 
 INSERT INTO problems (
   id, short_id, title, description, status, priority, severity,
   owner_id, team_id, affected_product_ids, affected_services,
-  has_workaround, tags, created_by,
-  sla_breached, triage_sla_breached
+  has_workaround, tags, sla_breached, triage_sla_breached,
+  created_by, created_at, updated_at
 ) VALUES
-  ('40000000-0000-4000-8000-000004000001', 'PROB-218',
-   'Оплата полиса ОСАГО зависает на шаге 3DS',
-   'После ввода 3DS-кода клиент видит спиннер, статус не обновляется.',
-   'in_progress'::varchar, 'critical'::varchar, 'critical'::varchar,
-   '30000000-0000-4000-8000-000003000002',
-   '10000000-0000-4000-8000-000001000002',
-   ARRAY['20000000-0000-4000-8000-000002000001']::uuid[],
-   ARRAY['payments-gateway','mobile-api'],
-   TRUE, ARRAY['payments','3ds','mobile'],
-   '30000000-0000-4000-8000-000003000004',
-   FALSE, FALSE),
-  ('40000000-0000-4000-8000-000004000002', 'PROB-204',
-   'Не приходят push-уведомления о статусе обращения (Android 14+)',
-   'Пуши не доставляются после обновления приложения.',
-   'in_progress'::varchar, 'high'::varchar, 'major'::varchar,
-   '30000000-0000-4000-8000-000003000002',
-   '10000000-0000-4000-8000-000001000001',
-   ARRAY['20000000-0000-4000-8000-000002000001','20000000-0000-4000-8000-000002000004']::uuid[],
-   ARRAY['notifications'],
-   FALSE, ARRAY['push','android','firebase'],
-   '30000000-0000-4000-8000-000003000001',
-   FALSE, FALSE),
-  ('40000000-0000-4000-8000-000004000003', 'PROB-099',
-   'Ошибка PDF полиса в личном кабинете',
-   '500 при генерации PDF на части аккаунтов.',
-   'new'::varchar, 'medium'::varchar, 'moderate'::varchar,
-   '30000000-0000-4000-8000-000003000004',
-   '10000000-0000-4000-8000-000001000001',
-   ARRAY['20000000-0000-4000-8000-000002000002']::uuid[],
-   ARRAY['pdf-service'],
-   TRUE, ARRAY['pdf','web'],
-   '30000000-0000-4000-8000-000003000002',
-   FALSE, FALSE);
+  ('40000000-0000-4000-8000-000000000001','PRB-218','Оплата полиса ОСАГО зависает на шаге 3DS','После ввода 3DS-кода клиент видит спиннер, статус не обновляется. Полис не выпускается, деньги списываются у части пользователей.',
+   'waiting_fix','critical','critical',
+   '30000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000003',
+   ARRAY['20000000-0000-4000-8000-000000000001'::uuid],ARRAY['payments-gateway','mobile-api'],
+   TRUE,ARRAY['payments','3ds','ios','android'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'10 days',NOW()-INTERVAL'1 hours'),
+  ('40000000-0000-4000-8000-000000000002','PRB-204','Не приходят push-уведомления о статусе обращения (Android 14+)','Клиенты не получают пуши о смене статуса. Воспроизводится после установки обновления приложения 5.18.x на Android 14/15.',
+   'in_progress','high','major',
+   '30000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001',
+   ARRAY['20000000-0000-4000-8000-000000000001'::uuid,'20000000-0000-4000-8000-000000000002'::uuid,'20000000-0000-4000-8000-000000000004'::uuid],ARRAY['mobile-api','notifications'],
+   TRUE,ARRAY['push','fcm','android'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'17 days',NOW()-INTERVAL'2 hours'),
+  ('40000000-0000-4000-8000-000000000003','PRB-197','Документы КАСКО не открываются в личном кабинете','При попытке открыть PDF полиса КАСКО получается 500 от document-service.',
+   'in_progress','high','major',
+   '30000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000006',
+   ARRAY['20000000-0000-4000-8000-000000000002'::uuid],ARRAY['document-service','pdf-renderer'],
+   TRUE,ARRAY['pdf','document-hub','backend'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'21 days',NOW()-INTERVAL'2 hours'),
+  ('40000000-0000-4000-8000-000000000004','PRB-186','Ошибка авторизации по СМС после смены номера','Если пользователь сменил номер телефона за последние 24 часа, повторная авторизация падает с 401.',
+   'monitoring','high','major',
+   '30000000-0000-4000-8000-000000000005','10000000-0000-4000-8000-000000000004',
+   ARRAY['20000000-0000-4000-8000-000000000001'::uuid,'20000000-0000-4000-8000-000000000002'::uuid,'20000000-0000-4000-8000-000000000003'::uuid,'20000000-0000-4000-8000-000000000004'::uuid],ARRAY['auth-service','sms-gateway'],
+   TRUE,ARRAY['auth','sms','identity'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'29 days',NOW()-INTERVAL'3 hours'),
+  ('40000000-0000-4000-8000-000000000005','PRB-179','Расчёт стоимости НС не учитывает скидку постоянного клиента','При расчёте полиса НС не применяется скидка для клиентов с историей > 2 лет.',
+   'new','medium','moderate',
+   '30000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000005',
+   ARRAY['20000000-0000-4000-8000-000000000003'::uuid],ARRAY['policy-service','pricing-engine'],
+   FALSE,ARRAY['pricing','ns','new'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'37 days',NOW()-INTERVAL'4 hours'),
+  ('40000000-0000-4000-8000-000000000006','PRB-172','ДМС: не отображается список клиник в Казани','В мобильном приложении после релиза 5.18 список клиник для региона Казань пустой.',
+   'in_progress','medium','moderate',
+   '30000000-0000-4000-8000-000000000008','10000000-0000-4000-8000-000000000001',
+   ARRAY['20000000-0000-4000-8000-000000000004'::uuid],ARRAY['mobile-api','clinics-api'],
+   TRUE,ARRAY['clinics','kzn','mobile'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'43 days',NOW()-INTERVAL'5 hours'),
+  ('40000000-0000-4000-8000-000000000007','PRB-165','Backend API возвращает 504 на /policies/list при > 100 полисах','Корпоративные клиенты с большим числом полисов получают тайм-аут.',
+   'in_progress','high','major',
+   '30000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000002',
+   ARRAY['20000000-0000-4000-8000-000000000001'::uuid,'20000000-0000-4000-8000-000000000002'::uuid],ARRAY['backend-api','user-service'],
+   TRUE,ARRAY['backend','timeout','api'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'50 days',NOW()-INTERVAL'2 hours'),
+  ('40000000-0000-4000-8000-000000000008','PRB-154','Дубль страховых случаев в истории клиента','В истории отображаются дублирующиеся записи о страховых случаях после миграции данных.',
+   'monitoring','low','minor',
+   '30000000-0000-4000-8000-000000000006','10000000-0000-4000-8000-000000000007',
+   ARRAY['20000000-0000-4000-8000-000000000002'::uuid,'20000000-0000-4000-8000-000000000003'::uuid],ARRAY['analytics','migration-job'],
+   TRUE,ARRAY['data','migration'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'57 days',NOW()-INTERVAL'8 hours'),
+  ('40000000-0000-4000-8000-000000000009','PRB-148','Ошибка "Invalid VIN" при оформлении ОСАГО для редких марок','Для VIN некоторых китайских и корейских моделей валидатор возвращает ошибку.',
+   'new','medium','moderate',
+   NULL,'10000000-0000-4000-8000-000000000005',
+   ARRAY['20000000-0000-4000-8000-000000000001'::uuid],ARRAY['policy-service','vin-validator'],
+   FALSE,ARRAY['vin','validation','new'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'64 days',NOW()-INTERVAL'1 hours'),
+  ('40000000-0000-4000-8000-000000000010','PRB-140','Не сохраняется вложение к обращению > 8 МБ','Файлы крупнее 8 МБ не загружаются и не возвращают понятную ошибку.',
+   'monitoring','low','minor',
+   '30000000-0000-4000-8000-000000000007','10000000-0000-4000-8000-000000000006',
+   ARRAY['20000000-0000-4000-8000-000000000001'::uuid,'20000000-0000-4000-8000-000000000002'::uuid,'20000000-0000-4000-8000-000000000003'::uuid,'20000000-0000-4000-8000-000000000004'::uuid],ARRAY['upload-service','nginx'],
+   TRUE,ARRAY['upload','limits'],
+   FALSE,FALSE,
+   '30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'70 days',NOW()-INTERVAL'9 hours');
 
 INSERT INTO problem_products (problem_id, product_id) VALUES
-  ('40000000-0000-4000-8000-000004000001', '20000000-0000-4000-8000-000002000001'),
-  ('40000000-0000-4000-8000-000004000002', '20000000-0000-4000-8000-000002000001'),
-  ('40000000-0000-4000-8000-000004000002', '20000000-0000-4000-8000-000002000004'),
-  ('40000000-0000-4000-8000-000004000003', '20000000-0000-4000-8000-000002000002');
+  ('40000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001'),
+  ('40000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001'),
+  ('40000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000002'),
+  ('40000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000004'),
+  ('40000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000002'),
+  ('40000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000001'),
+  ('40000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000002'),
+  ('40000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000003'),
+  ('40000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000004'),
+  ('40000000-0000-4000-8000-000000000005','20000000-0000-4000-8000-000000000003'),
+  ('40000000-0000-4000-8000-000000000006','20000000-0000-4000-8000-000000000004'),
+  ('40000000-0000-4000-8000-000000000007','20000000-0000-4000-8000-000000000001'),
+  ('40000000-0000-4000-8000-000000000007','20000000-0000-4000-8000-000000000002'),
+  ('40000000-0000-4000-8000-000000000008','20000000-0000-4000-8000-000000000002'),
+  ('40000000-0000-4000-8000-000000000008','20000000-0000-4000-8000-000000000003'),
+  ('40000000-0000-4000-8000-000000000009','20000000-0000-4000-8000-000000000001'),
+  ('40000000-0000-4000-8000-000000000010','20000000-0000-4000-8000-000000000001'),
+  ('40000000-0000-4000-8000-000000000010','20000000-0000-4000-8000-000000000002'),
+  ('40000000-0000-4000-8000-000000000010','20000000-0000-4000-8000-000000000003'),
+  ('40000000-0000-4000-8000-000000000010','20000000-0000-4000-8000-000000000004');
 
 INSERT INTO tasks (
-  id, problem_id, short_id, task_type, status, title, description,
+  id, problem_id, short_id, task_type, status, title,
   priority, severity, team_id, assignee_id,
-  proposed_by, proposed_at, reviewed_by, reviewed_at,
-  jira_url, jira_issue_key, workaround, has_workaround, support_notes,
-  ai_summary, created_by,
-  environments, tags
+  jira_url, jira_issue_key, workaround, has_workaround,
+  support_notes, root_cause, fix_date, fix_version,
+  environments, tickets_count, created_by, created_at, updated_at
 ) VALUES
-  ('50000000-0000-4000-8000-000005000001',
-   '40000000-0000-4000-8000-000004000001', 'BUG-301', 'bug', 'open',
-   'Зависание 3DS на iOS/Android после таймаута банка',
-   'Повторяемый кейс после релиза 2.13.',
-   'critical', 'critical',
-   '10000000-0000-4000-8000-000001000002', '30000000-0000-4000-8000-000003000004',
-   NULL, NULL, NULL, NULL,
-   'https://jira.example.com/browse/PAY-1201', 'PAY-1201',
-   'Попросите клиента оплатить с другого устройства или очистить кэш приложения.',
-   TRUE,
-   'Подтверждено на iOS 17.4 и Android 14. Временный обход через веб ЛК.',
-   'Клиенты застревают на экране 3DS; часть платежей проходит дважды.',
-   '30000000-0000-4000-8000-000003000004',
-   ARRAY['production','ios','android'], ARRAY['3ds','payments']),
+  ('50000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','BUG-9182','bug','in_progress','3DS callback теряется при возврате из ACS',
+   'critical','critical','10000000-0000-4000-8000-000000000003','30000000-0000-4000-8000-000000000004',
+   'https://jira.sbr.example/browse/PAY-3318','PAY-3318','Попросить клиента переоткрыть приложение и нажать «Проверить статус оплаты» через 60 сек.',TRUE,
+   'Не выпускать новый платёж до проверки статуса; помочь восстановить полис.','Race condition между ACS callback и polling-эндпоинтом /payments/state.',NULL,NULL,
+   ARRAY['prod'],612,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'8 days',NOW()-INTERVAL'1 hours'),
+  ('50000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000001','BUG-9170','bug','in_review','Платёжный спиннер не отваливается по таймауту',
+   'critical','major','10000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',
+   'https://jira.sbr.example/browse/MOB-7741','MOB-7741','Принудительный таймаут 90 сек добавлен в hotfix 5.18.4 (на ревью).',TRUE,
+   'Сообщить клиенту, что после 90 сек спиннера можно безопасно перезайти.','Нет обработчика onTimeout в PaymentProgressViewModel.',NULL,NULL,
+   ARRAY['prod','staging'],287,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'11 days',NOW()-INTERVAL'2 hours'),
+  ('50000000-0000-4000-8000-000000000003','40000000-0000-4000-8000-000000000001','BUG-9163','bug','in_progress','ACS-домен заблокирован у части ISP',
+   'critical','major','10000000-0000-4000-8000-000000000003','30000000-0000-4000-8000-000000000004',
+   'https://jira.sbr.example/browse/PAY-3322','PAY-3322','Перевыпустить ссылку на 3DS через support tools.',TRUE,
+   'Эскалировать партнёру; предложить альтернативный способ оплаты.','Часть ISP блокирует acs.partner.example как фишинг.',NULL,NULL,
+   ARRAY['prod'],207,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'14 days',NOW()-INTERVAL'3 hours'),
+  ('50000000-0000-4000-8000-000000000004','40000000-0000-4000-8000-000000000002','BUG-9051','bug','in_progress','FCM token не обновляется на Android 14',
+   'high','major','10000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',
+   'https://jira.sbr.example/browse/MOB-7689','MOB-7689','Попросить клиента переустановить приложение или включить уведомления заново.',TRUE,
+   'Исправляется в 5.18.5; вручную обновлять токен через support tools.','Изменение поведения FirebaseMessaging.getToken() на Android 14.','2026-05-12','5.18.3',
+   ARRAY['prod'],312,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'17 days',NOW()-INTERVAL'4 hours'),
+  ('50000000-0000-4000-8000-000000000005','40000000-0000-4000-8000-000000000002','BUG-9047','bug','fixed','Notification channel удаляется при апдейте',
+   'high','moderate','10000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',
+   'https://jira.sbr.example/browse/MOB-7691','MOB-7691','Переоткрыть приложение, чтобы канал создался заново.',TRUE,
+   'Уже исправлено в 5.18.4.','Миграция на новый channel_id без сохранения настроек.','2026-05-04','5.18.4',
+   ARRAY['prod'],72,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'20 days',NOW()-INTERVAL'5 hours'),
+  ('50000000-0000-4000-8000-000000000006','40000000-0000-4000-8000-000000000003','BUG-8990','bug','in_progress','document-service возвращает 500 при PDF > 4 МБ',
+   'high','major','10000000-0000-4000-8000-000000000006','30000000-0000-4000-8000-000000000002',
+   'https://jira.sbr.example/browse/DOC-1129','DOC-1129','Запросить у саппорта e-mail c PDF.',TRUE,
+   'Эскалация: пока не пофикшено, отправлять полис вручную.','OOM в pdf-generator на крупных шаблонах КАСКО.',NULL,NULL,
+   ARRAY['prod'],254,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'23 days',NOW()-INTERVAL'6 hours'),
+  ('50000000-0000-4000-8000-000000000007','40000000-0000-4000-8000-000000000004','BUG-8902','bug','in_progress','Identity service не инвалидирует старый токен после смены номера',
+   'high','major','10000000-0000-4000-8000-000000000004','30000000-0000-4000-8000-000000000005',
+   'https://jira.sbr.example/browse/AUTH-441','AUTH-441','Force logout через support tools, после этого пускает.',TRUE,
+   'Force logout — стандартный обход. Исправляется в Q2.','Кэш сессий по старому номеру, TTL 24ч.',NULL,NULL,
+   ARRAY['prod'],278,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'26 days',NOW()-INTERVAL'7 hours'),
+  ('50000000-0000-4000-8000-000000000008','40000000-0000-4000-8000-000000000006','BUG-8770','bug','fixed','Geo-фильтр клиник не учитывает регион Казань',
+   'medium','moderate','10000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000008',
+   'https://jira.sbr.example/browse/MOB-7510','MOB-7510','Сменить регион на «Татарстан» вручную.',TRUE,
+   'Уже исправлено в 5.18.5 (релиз 06.05).','Опечатка в маппинге region code KZN → 16.','2026-05-06','5.19.7',
+   ARRAY['prod'],92,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'29 days',NOW()-INTERVAL'8 hours'),
+  ('50000000-0000-4000-8000-000000000009','40000000-0000-4000-8000-000000000007','BUG-8650','bug','in_progress','/policies/list O(N) запрос к user-service',
+   'high','major','10000000-0000-4000-8000-000000000002','30000000-0000-4000-8000-000000000002',
+   'https://jira.sbr.example/browse/WEB-2204','WEB-2204','Корпоративные клиенты — выгрузка списка через support tools.',TRUE,
+   'Переход на batch endpoint, ETA 14.05.','N+1 запросов в user-service на каждый полис.','2026-05-14','5.19.8',
+   ARRAY['prod','staging'],64,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'32 days',NOW()-INTERVAL'9 hours'),
+  ('50000000-0000-4000-8000-000000000010','40000000-0000-4000-8000-000000000008','BUG-8412','bug','fixed','Migration job дублирует строки страховых случаев',
+   'low','minor','10000000-0000-4000-8000-000000000007','30000000-0000-4000-8000-000000000006',
+   'https://jira.sbr.example/browse/AN-118','AN-118','Игнорировать дубликаты с одинаковым case_id.',TRUE,
+   'Дедупликация раскатана; данные подчистятся в течение 24ч.','Idempotency key не использовался при ретраях.','2026-05-01','5.20.9',
+   ARRAY['prod'],41,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'35 days',NOW()-INTERVAL'10 hours'),
+  ('50000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000010','BUG-8208','bug','in_review','Upload service отвергает файлы > 8 МБ без ошибки',
+   'low','minor','10000000-0000-4000-8000-000000000006','30000000-0000-4000-8000-000000000007',
+   'https://jira.sbr.example/browse/DOC-1078','DOC-1078','Рекомендовать сжать файл или отправить по e-mail.',TRUE,
+   'Поднять лимит до 25 МБ, добавить понятную ошибку.','Лимит nginx 8M, нет 413-ответа клиенту.',NULL,NULL,
+   ARRAY['prod'],28,'30000000-0000-4000-8000-000000000001',NOW()-INTERVAL'38 days',NOW()-INTERVAL'11 hours');
 
-  ('50000000-0000-4000-8000-000005000002',
-   '40000000-0000-4000-8000-000004000001', 'UI-092', 'ui_debt', 'pending_confirmation',
-   'Неочевидный текст ошибки при отказе банка',
-   'На шаге 3DS текст «Что-то пошло не так» без кода ошибки.',
-   'medium', 'moderate',
-   '10000000-0000-4000-8000-000001000002', NULL,
-   '30000000-0000-4000-8000-000003000003', NOW() - INTERVAL '6 hours',
-   NULL, NULL,
-   NULL, NULL, NULL, FALSE, NULL, NULL,
-   NULL,
-   ARRAY['production','mobile'], ARRAY['ux']),
+DO $$
+DECLARE
+  _prob UUID; _task UUID; _prod UUID;
+  _plats TEXT[]; _prods TEXT[]; _texts TEXT[];
+  _n INT; _n_res INT;
+  _plat TEXT; _reg TEXT; _ch TEXT; _txt TEXT;
+  _stat TEXT; _is_res BOOL; _q TEXT;
+  _regions  TEXT[] := ARRAY['MSK','SPB','EKB','NSK','KZN','RND','VLG','CHE'];
+  _channels TEXT[] := ARRAY['chat','phone','email','social','in-app'];
+  i INT;
+BEGIN
+  -- PR01: 50 tickets, 8 research
+  _prob  := '40000000-0000-4000-8000-000000000001';
+  _task  := '50000000-0000-4000-8000-000000000001';
+  _plats := ARRAY['mobile_app','web'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000001'];
+  _texts := ARRAY['Не могу оплатить полис — после ввода кода висит загрузка минут пять, потом просто экран белый. Деньги списались.','Платёж завис на шаге 3DS, статус не обновляется уже 20 минут.','Оплата ОСАГО через мобильное приложение не завершается, вижу спиннер.','После ввода 3DS-кода ничего не происходит. Деньги с карты ушли.'];
+  _n := 50; _n_res := 8;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN i % 3 = 0 THEN 'answered' WHEN _is_res THEN 'researching' ELSE 'linked' END;
+    _q := CASE WHEN _is_res THEN 'task_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-8919-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR02: 25 tickets, 3 research
+  _prob  := '40000000-0000-4000-8000-000000000002';
+  _task  := '50000000-0000-4000-8000-000000000004';
+  _plats := ARRAY['mobile_app'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000004'];
+  _texts := ARRAY['Здравствуйте! Не приходят пуши о статусе обращения, хотя в настройках всё включено.','Push-уведомления перестали приходить после обновления приложения на Android.'];
+  _n := 25; _n_res := 3;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN i % 3 = 0 THEN 'answered' WHEN _is_res THEN 'researching' ELSE 'linked' END;
+    _q := CASE WHEN _is_res THEN 'task_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-8849-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR03: 20 tickets, 4 research
+  _prob  := '40000000-0000-4000-8000-000000000003';
+  _task  := '50000000-0000-4000-8000-000000000006';
+  _plats := ARRAY['personal_account','mobile_app'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000002'];
+  _texts := ARRAY['При попытке скачать полис КАСКО получаю ошибку 500.','Документ КАСКО не открывается в личном кабинете.'];
+  _n := 20; _n_res := 4;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN i % 3 = 0 THEN 'answered' WHEN _is_res THEN 'researching' ELSE 'linked' END;
+    _q := CASE WHEN _is_res THEN 'task_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-4022-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR04: 18 tickets, 2 research
+  _prob  := '40000000-0000-4000-8000-000000000004';
+  _task  := '50000000-0000-4000-8000-000000000007';
+  _plats := ARRAY['mobile_app','personal_account'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000004'];
+  _texts := ARRAY['Сменил номер вчера, сегодня не могу зайти. Пишет неверный код.','После смены номера телефона авторизация по СМС не работает.'];
+  _n := 18; _n_res := 2;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN i % 3 = 0 THEN 'answered' WHEN _is_res THEN 'researching' ELSE 'linked' END;
+    _q := CASE WHEN _is_res THEN 'task_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-4477-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR05: 10 tickets, 5 research
+  _prob  := '40000000-0000-4000-8000-000000000005';
+  _task  := NULL;
+  _plats := ARRAY['mobile_app','web','personal_account'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000003'];
+  _texts := ARRAY['Хочу оформить НС. Скидка постоянного клиента не применяется.','При расчёте НС система не учитывает мою историю как постоянного клиента.'];
+  _n := 10; _n_res := 5;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN _is_res THEN 'researching' WHEN i % 4 = 0 THEN 'duplicate' ELSE 'new' END;
+    _q := CASE WHEN (_is_res OR _stat = 'new') THEN 'problem_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-8847-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR06: 10 tickets, 1 research
+  _prob  := '40000000-0000-4000-8000-000000000006';
+  _task  := '50000000-0000-4000-8000-000000000008';
+  _plats := ARRAY['mobile_app'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000004'];
+  _texts := ARRAY['В мобильном приложении нет ни одной клиники в Казани.','Список клиник ДМС для Казани пустой.'];
+  _n := 10; _n_res := 1;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN i % 3 = 0 THEN 'answered' WHEN _is_res THEN 'researching' ELSE 'linked' END;
+    _q := CASE WHEN _is_res THEN 'task_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-8243-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR07: 10 tickets, 1 research
+  _prob  := '40000000-0000-4000-8000-000000000007';
+  _task  := '50000000-0000-4000-8000-000000000009';
+  _plats := ARRAY['backend_api','personal_account'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002'];
+  _texts := ARRAY['Список полисов вообще не открывается, бесконечная загрузка.','Корпоративный аккаунт — страница /policies/list зависает.'];
+  _n := 10; _n_res := 1;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN i % 3 = 0 THEN 'answered' WHEN _is_res THEN 'researching' ELSE 'linked' END;
+    _q := CASE WHEN _is_res THEN 'task_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-1764-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR08: 10 tickets, 1 research
+  _prob  := '40000000-0000-4000-8000-000000000008';
+  _task  := '50000000-0000-4000-8000-000000000010';
+  _plats := ARRAY['personal_account'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000003'];
+  _texts := ARRAY['В истории два одинаковых страховых случая с одной и той же датой.','Дублирующиеся записи о страховых случаях после обновления.'];
+  _n := 10; _n_res := 1;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN i % 3 = 0 THEN 'answered' WHEN _is_res THEN 'researching' ELSE 'linked' END;
+    _q := CASE WHEN _is_res THEN 'task_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-6690-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR09: 15 tickets, 8 research
+  _prob  := '40000000-0000-4000-8000-000000000009';
+  _task  := NULL;
+  _plats := ARRAY['mobile_app','web'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000001'];
+  _texts := ARRAY['Пытаюсь оформить ОСАГО на BYD — пишет неверный VIN.','При вводе VIN китайского автомобиля система выдаёт ошибку валидации.','Ошибка «Invalid VIN» на Haval F7 — всё верно ввёл.'];
+  _n := 15; _n_res := 8;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN _is_res THEN 'researching' WHEN i % 4 = 0 THEN 'duplicate' ELSE 'new' END;
+    _q := CASE WHEN (_is_res OR _stat = 'new') THEN 'problem_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-1778-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+  -- PR10: 10 tickets, 1 research
+  _prob  := '40000000-0000-4000-8000-000000000010';
+  _task  := '50000000-0000-4000-8000-000000000011';
+  _plats := ARRAY['personal_account','web'];
+  _prods := ARRAY['20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000004'];
+  _texts := ARRAY['Не могу прикрепить скан паспорта (12 МБ) к обращению.','Файл больше 8 МБ не загружается и не показывает понятную ошибку.'];
+  _n := 10; _n_res := 1;
+  FOR i IN 1.._n LOOP
+    _plat := _plats[1+((i-1) % array_length(_plats,1))];
+    _prod := _prods[1+((i-1) % array_length(_prods,1))];
+    _reg  := _regions[1+((i-1) % 8)];
+    _ch   := _channels[1+((i-1) % 5)];
+    _txt  := _texts[1+((i-1) % array_length(_texts,1))];
+    _is_res := (i <= _n_res);
+    _stat := CASE WHEN i % 3 = 0 THEN 'answered' WHEN _is_res THEN 'researching' ELSE 'linked' END;
+    _q := CASE WHEN _is_res THEN 'task_determination' ELSE NULL END;
+    INSERT INTO support_tickets
+      (user_id,region,product_id,platform,raw_text,summary,
+       ticket_date,channel,status,current_queue,
+       problem_id,task_id,requires_research,is_new_case)
+    VALUES
+      ('client-8385-' || i::text,
+       _reg,_prod::UUID,_plat,_txt,left(_txt,80),
+       NOW()-(INTERVAL'1 hour'*((i*7)%336)),
+       _ch,_stat,_q,
+       _prob,_task,_is_res,FALSE);
+  END LOOP;
+END;
+$$;
 
-  ('50000000-0000-4000-8000-000005000003',
-   '40000000-0000-4000-8000-000004000002', 'BUG-204', 'bug', 'in_progress',
-   'Push token не регистрируется на Android 14+',
-   'FCM topic subscription падает тихо.',
-   'high', 'major',
-   '10000000-0000-4000-8000-000001000001', '30000000-0000-4000-8000-000003000002',
-   NULL, NULL, NULL, NULL,
-   'https://jira.example.com/browse/MOB-889', 'MOB-889',
-   NULL, FALSE,
-   NULL,
-   'Частота выросла после 5.18.x.',
-   '30000000-0000-4000-8000-000003000002',
-   ARRAY['production','android'], ARRAY['push','fcm']),
-
-  ('50000000-0000-4000-8000-000005000004',
-   '40000000-0000-4000-8000-000004000002', 'BK-045', 'backlog', 'draft',
-   'Показывать статус пушей в приложении',
-   'Пользователь не видит, что уведомления отключены на уровне ОС.',
-   'low', 'minor',
-   '10000000-0000-4000-8000-000001000001', NULL,
-   '30000000-0000-4000-8000-000003000001', NOW() - INTERVAL '1 day',
-   NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL,
-   ARRAY['mobile'], ARRAY['backlog']),
-
-  ('50000000-0000-4000-8000-000005000005',
-   '40000000-0000-4000-8000-000004000003', 'BUG-099', 'bug', 'fixed',
-   '500 при рендере PDF после миграции шрифтов',
-   NULL,
-   'medium', 'major',
-   '10000000-0000-4000-8000-000001000001', NULL,
-   NULL, NULL, NULL, NULL,
-   'https://jira.example.com/browse/MOB-441', 'MOB-441',
-   'Открыть полис через «Скачать ещё раз».',
-   TRUE,
-   'Фикс в 5.17.2',
-   NULL, '30000000-0000-4000-8000-000003000002',
-   ARRAY['web','staging'], ARRAY['pdf']),
-
-  ('50000000-0000-4000-8000-000005000006',
-   '40000000-0000-4000-8000-000004000003', 'CJM-012', 'cjm_debt', 'draft',
-   'Дублирующее письмо после покупки КАСКО',
-   'Два одинаковых email за 30 сек.',
-   'medium', 'moderate',
-   '10000000-0000-4000-8000-000001000001', NULL,
-   '30000000-0000-4000-8000-000003000001', NOW() - INTERVAL '3 hours',
-   NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL,
-   ARRAY['backend'], ARRAY['email','duplicate']);
-
--- Initial tickets (622 = base for duplicate chain)
-INSERT INTO support_tickets (
-  id, short_id, user_id, customer_name, customer_email, region,
-  product_id, platform, raw_text, summary, ticket_date, channel, status,
-  current_queue, problem_id, task_id,
-  ai_problem_confidence, ai_task_confidence, ai_category,
-  requires_research, assigned_to
-) VALUES
-  ('60000000-0000-4000-8000-000006000001', 'TKT-90001', 'cust_10001', 'Иван П.', 'ivan@example.com', 'MSK',
-   '20000000-0000-4000-8000-000002000001', 'mobile_app',
-   'Не проходит оплата ОСАГО на айфоне, вечная загрузка после банка',
-   '3DS загрузка iOS ОСАГО', NOW() - INTERVAL '2 hours', 'chat', 'in_queue',
-   'problem_determination', NULL, NULL, 0.71, NULL, 'payments', FALSE, NULL),
-
-  ('60000000-0000-4000-8000-000006000002', 'TKT-90002', 'cust_10002', 'Пётр С.', NULL, 'SPB',
-   '20000000-0000-4000-8000-000002000001', 'mobile_app',
-   'То же что у друга: оплата ОСАГО зависла',
-   'Дубль 3DS?', NOW() - INTERVAL '3 hours', 'phone', 'in_queue',
-   'problem_determination', NULL, NULL, 0.68, NULL, 'payments', FALSE, NULL),
-
-  ('60000000-0000-4000-8000-000006000003', 'TKT-90003', 'cust_10003', 'Елена К.', 'elena@example.com', 'EKB',
-   '20000000-0000-4000-8000-000002000001', 'web',
-   'Оплатил Полис через ЛК но статус висит час',
-   'Web ЛК статус платежа', NOW() - INTERVAL '90 minutes', 'portal', 'linked',
-   NULL, '40000000-0000-4000-8000-000004000001', '50000000-0000-4000-8000-000005000001',
-   0.93, 0.94, 'payments', FALSE, '30000000-0000-4000-8000-000003000001'),
-
-  ('60000000-0000-4000-8000-000006000004', 'TKT-90004', 'cust_10004', 'Олег Р.', NULL, 'NSK',
-   '20000000-0000-4000-8000-000002000001', 'personal_account',
-   'Нет push о готовности полиса, Android вчера обновился',
-   'Нет push Android', NOW() - INTERVAL '4 hours', 'email', 'in_queue',
-   'task_determination', '40000000-0000-4000-8000-000004000002', NULL,
-   0.88, 0.74, 'notifications', FALSE, NULL),
-
-  ('60000000-0000-4000-8000-000006000005', 'TKT-90005', 'cust_10005', NULL, NULL, 'MSK',
-   '20000000-0000-4000-8000-000002000004', 'mobile_app',
-   'Подскажите как включить пуш для статусов обращения',
-   'Вопрос по пушам ДМС', NOW() - INTERVAL '50 minutes', 'chat', 'in_queue',
-   'client_response', '40000000-0000-4000-8000-000004000002', NULL,
-   0.92, NULL, NULL, TRUE, NULL),
-
-  ('60000000-0000-4000-8000-000006000006', 'TKT-90006', 'cust_10006', 'Анна В.', NULL, 'RND',
-   '20000000-0000-4000-8000-000002000002', 'web',
-   'PDF полис не открывается, ошибка 500 в консоли',
-   'PDF 500 ЛК КАСКО', NOW() - INTERVAL '8 hours', 'email', 'linked',
-   NULL, '40000000-0000-4000-8000-000004000003', '50000000-0000-4000-8000-000005000005',
-   0.91, 0.92, NULL, FALSE, '30000000-0000-4000-8000-000003000003'),
-
-  ('60000000-0000-4000-8000-000006000007', 'TKT-90007', 'cust_10007', NULL, NULL, 'MSK',
-   '20000000-0000-4000-8000-000002000002', 'web',
-   'Два одинаковых письма о полисе КАСКО пришло',
-   'Дубль email КАСКО', NOW() - INTERVAL '30 minutes', 'email', 'in_queue',
-   'recommendation_review', '40000000-0000-4000-8000-000004000003', '50000000-0000-4000-8000-000005000005',
-   0.9, NULL, NULL, FALSE, NULL);
-
-UPDATE support_tickets
-SET is_duplicate = TRUE, duplicate_of = '60000000-0000-4000-8000-000006000001', status = 'duplicate'
-WHERE id = '60000000-0000-4000-8000-000006000002';
-
-UPDATE support_tickets SET
-  recommendation_text = 'Попросите клиента оплатить с другого устройства или очистить кэш приложения.',
-  recommendation_sent = FALSE,
-  status = 'awaiting_response'
-WHERE id = '60000000-0000-4000-8000-000006000007';
-
-INSERT INTO attachments (ticket_id, file_name, file_type, file_size, s3_key, s3_bucket, is_log, uploaded_by) VALUES
-  ('60000000-0000-4000-8000-000006000003', 'payment.log', 'text/plain', 10240, 'tickets/6003/payment.log', 'rmo-attachments', TRUE, '30000000-0000-4000-8000-000003000001'),
-  ('60000000-0000-4000-8000-000006000006', 'console.png', 'image/png', 48219, 'tickets/6006/console.png', 'rmo-attachments', FALSE, '30000000-0000-4000-8000-000003000003');
-
-INSERT INTO queue_items (queue_id, ticket_id, priority_score, status, reason, sla_deadline)
-SELECT '70000000-0000-4000-8000-000007000001', '60000000-0000-4000-8000-000006000001', 0.94, 'pending',
-       'AI confidence 0.71 < threshold 0.9', NOW() + INTERVAL '45 minutes'
-UNION ALL
-SELECT '70000000-0000-4000-8000-000007000001', '60000000-0000-4000-8000-000006000002', 0.87, 'pending',
-       'Duplicate candidate + low confidence', NOW() + INTERVAL '30 minutes'
-UNION ALL
-SELECT '70000000-0000-4000-8000-000007000002', '60000000-0000-4000-8000-000006000004', 0.91, 'in_progress',
-       'AI task confidence 0.74 < threshold 0.9', NOW() + INTERVAL '1 hour'
-UNION ALL
-SELECT '70000000-0000-4000-8000-000007000004', '60000000-0000-4000-8000-000006000005', 0.62, 'pending',
-       'No workaround on linked problem scope', NOW() + INTERVAL '2 hours'
-UNION ALL
-SELECT '70000000-0000-4000-8000-000007000003', '60000000-0000-4000-8000-000006000007', 0.55, 'pending',
-       'Workaround available; human review', NOW() + INTERVAL '20 minutes';
-
-UPDATE queue_items SET assigned_to = '30000000-0000-4000-8000-000003000001', assigned_at = NOW() - INTERVAL '10 minutes'
-WHERE ticket_id = '60000000-0000-4000-8000-000006000004';
-
-INSERT INTO activity_log (entity_type, entity_id, action, actor_id, actor_name, new_value, comment) VALUES
-  ('support_ticket', '60000000-0000-4000-8000-000006000003', 'linked', '30000000-0000-4000-8000-000003000001', 'Анна Котова',
-   '{"problem_id":"40000000-0000-4000-8000-000004000001","task_id":"50000000-0000-4000-8000-000005000001"}'::jsonb, NULL),
-  ('problem', '40000000-0000-4000-8000-000004000001', 'created', '30000000-0000-4000-8000-000003000004', 'Илья Громов',
-   '{"short_id":"PROB-218"}'::jsonb, NULL),
-  ('task', '50000000-0000-4000-8000-000005000001', 'jira_linked', '30000000-0000-4000-8000-000003000004', 'Илья Громов',
-   '{"jira_issue_key":"PAY-1201"}'::jsonb, NULL),
-  ('support_ticket', '60000000-0000-4000-8000-000006000004', 'queue_entered', NULL, 'system',
-   '{"queue_code":"task_determination"}'::jsonb, NULL);
-
-INSERT INTO comments (entity_type, entity_id, author_id, body, is_internal) VALUES
-  ('support_ticket', '60000000-0000-4000-8000-000006000005', '30000000-0000-4000-8000-000003000001',
-   'Нужен текст ответа: проверили настройки уведомлений на Android 13+.', TRUE),
-  ('problem', '40000000-0000-4000-8000-000004000001', '30000000-0000-4000-8000-000003000002',
-   'Регламентируем коммуникацию с банками по кодам ошибок.', TRUE);
-
-INSERT INTO ai_suggestions (ticket_id, suggestion_type, suggested_entity_type, suggested_entity_id, confidence, reasoning, is_accepted) VALUES
-  ('60000000-0000-4000-8000-000006000001', 'problem_match', 'problem', '40000000-0000-4000-8000-000004000001', 0.71,
-   'Совпадают продукт ОСАГО, платформа mobile_app и паттерн 3DS после оплаты', NULL),
-  ('60000000-0000-4000-8000-000006000004', 'task_match', 'task', '50000000-0000-4000-8000-000005000003', 0.74,
-   'Android + push + задача BUG-204', NULL);
-
-INSERT INTO notifications (user_id, type, title, body, entity_type, entity_id, is_read, send_email) VALUES
-  ('30000000-0000-4000-8000-000003000004', 'draft_proposal_received', 'Новый черновик задачи',
-   'Оператор предложил UI-092 по PROB-218', 'task', '50000000-0000-4000-8000-000005000002', FALSE, FALSE),
-  ('30000000-0000-4000-8000-000003000003', 'assignment', 'Взята позиция в очереди',
-   'Вы взяли TKT-90004 в task_determination', 'support_ticket', '60000000-0000-4000-8000-000006000004', TRUE, FALSE);
-
-INSERT INTO notifications (team_id, type, title, body, entity_type, entity_id)
-VALUES
-  ('10000000-0000-4000-8000-000001000002', 'new_problem',
-   'Критическая проблема PROB-218', 'Высокий поток платежных обращений', 'problem',
-   '40000000-0000-4000-8000-000004000001');
-
-INSERT INTO priority_recalculation_log (entity_type, entity_id, old_priority, new_priority, reason) VALUES
-  ('problem', '40000000-0000-4000-8000-000004000001', 'high', 'critical', 'WoW ticket delta + SLA risk');
+-- Override denormalised counters to match frontend mock values
+UPDATE problems AS p SET
+  tickets_count              = v.tc,
+  tickets_count_prev_week    = v.tcp,
+  unresearched_count         = v.uc,
+  unresearched_count_prev_week = v.ucp,
+  tickets_no_task_count      = v.nob,
+  tasks_count                = v.tskc,
+  bugs_count                 = v.bc,
+  sla_breached               = v.slabr,
+  updated_at                 = NOW()
+FROM (VALUES
+  ('40000000-0000-4000-8000-000000000001',1248,931,86,98,142,3,3,TRUE),
+  ('40000000-0000-4000-8000-000000000002',412,349,22,21,28,2,2,TRUE),
+  ('40000000-0000-4000-8000-000000000003',318,224,41,32,64,1,1,TRUE),
+  ('40000000-0000-4000-8000-000000000004',287,312,12,20,9,1,1,FALSE),
+  ('40000000-0000-4000-8000-000000000005',154,138,38,25,154,0,0,FALSE),
+  ('40000000-0000-4000-8000-000000000006',96,101,4,8,6,1,1,FALSE),
+  ('40000000-0000-4000-8000-000000000007',73,60,6,6,4,1,1,TRUE),
+  ('40000000-0000-4000-8000-000000000008',42,51,2,5,1,1,1,FALSE),
+  ('40000000-0000-4000-8000-000000000009',211,131,198,114,211,0,0,FALSE),
+  ('40000000-0000-4000-8000-000000000010',28,28,1,1,0,1,1,FALSE)
+) AS v(id,tc,tcp,uc,ucp,nob,tskc,bc,slabr)
+WHERE p.id = v.id::UUID;
 
 INSERT INTO weekly_snapshots (entity_type, entity_id, week_start, tickets_count, unresearched_count, tasks_count)
-SELECT 'problem', id, DATE_TRUNC('week', NOW() - INTERVAL '7 days')::DATE,
-       CASE short_id WHEN 'PROB-218' THEN 80 WHEN 'PROB-204' THEN 210 WHEN 'PROB-099' THEN 40 END,
-       CASE short_id WHEN 'PROB-218' THEN 10 WHEN 'PROB-204' THEN 55 WHEN 'PROB-099' THEN 8 END,
-       CASE short_id WHEN 'PROB-218' THEN 2 WHEN 'PROB-204' THEN 4 WHEN 'PROB-099' THEN 2 END
-FROM problems;
+VALUES
+  ('problem','40000000-0000-4000-8000-000000000001',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,931,98,3),
+  ('problem','40000000-0000-4000-8000-000000000002',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,349,21,2),
+  ('problem','40000000-0000-4000-8000-000000000003',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,224,32,1),
+  ('problem','40000000-0000-4000-8000-000000000004',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,312,20,1),
+  ('problem','40000000-0000-4000-8000-000000000005',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,138,25,0),
+  ('problem','40000000-0000-4000-8000-000000000006',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,101,8,1),
+  ('problem','40000000-0000-4000-8000-000000000007',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,60,6,1),
+  ('problem','40000000-0000-4000-8000-000000000008',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,51,5,1),
+  ('problem','40000000-0000-4000-8000-000000000009',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,131,114,0),
+  ('problem','40000000-0000-4000-8000-000000000010',DATE_TRUNC('week',NOW()-INTERVAL'7 days')::DATE,28,1,1);
 
-UPDATE problems p
-SET
-  tasks_count = s.t,
-  bugs_count = s.b,
-  updated_at = NOW()
-FROM (
-  SELECT
-    problem_id,
-    COUNT(*)::int AS t,
-    COUNT(*) FILTER (WHERE task_type = 'bug')::int AS b
-  FROM tasks
-  GROUP BY problem_id
-) s
-WHERE p.id = s.problem_id;
+INSERT INTO attachments (ticket_id,file_name,file_type,file_size,s3_key,s3_bucket,is_log,is_screenshot,uploaded_by)
+SELECT st.id,
+  CASE ((row_number() OVER (ORDER BY st.created_at))::int % 3)
+    WHEN 0 THEN 'payment.log' WHEN 1 THEN 'screenshot.png' ELSE 'console.log' END,
+  CASE ((row_number() OVER (ORDER BY st.created_at))::int % 3)
+    WHEN 0 THEN 'text/plain'  WHEN 1 THEN 'image/png'      ELSE 'text/plain' END,
+  CASE ((row_number() OVER (ORDER BY st.created_at))::int % 3)
+    WHEN 0 THEN 10240 WHEN 1 THEN 48219 ELSE 8192 END,
+  'tickets/'||st.id::TEXT||'/file',
+  'rmo-attachments',
+  ((row_number() OVER (ORDER BY st.created_at))::int % 3 <> 1),
+  ((row_number() OVER (ORDER BY st.created_at))::int % 3 = 1),
+  '30000000-0000-4000-8000-000000000001'
+FROM support_tickets st
+WHERE (extract(epoch FROM st.created_at)::int % 4) = 0
+LIMIT 40;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000002',st.id,
+  0.95-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'90 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000001' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 12;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000002',st.id,
+  0.85-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'90 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000002' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 12;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000002',st.id,
+  0.85-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'90 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000003' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 12;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000002',st.id,
+  0.85-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'90 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000004' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 12;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000001',st.id,
+  0.7-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'60 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000005' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 12;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000002',st.id,
+  0.7-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'90 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000006' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 4;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000002',st.id,
+  0.85-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'90 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000007' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 6;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000002',st.id,
+  0.55-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'90 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000008' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 2;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000001',st.id,
+  0.7-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'60 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000009' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 12;
+
+INSERT INTO queue_items (queue_id,ticket_id,priority_score,status,reason,sla_deadline)
+SELECT '70000000-0000-4000-8000-000000000002',st.id,
+  0.55-(row_number() OVER (ORDER BY st.created_at DESC))::float*0.002,
+  'pending',
+  'AI confidence below threshold',
+  NOW()+INTERVAL'90 minutes'
+FROM support_tickets st
+WHERE st.problem_id='40000000-0000-4000-8000-000000000010' AND st.requires_research=TRUE
+  AND NOT EXISTS (SELECT 1 FROM queue_items qi WHERE qi.ticket_id=st.id)
+LIMIT 1;
+
+INSERT INTO activity_log (entity_type,entity_id,action,actor_id,actor_name,new_value,comment)
+VALUES
+  ('problem','40000000-0000-4000-8000-000000000001','created','30000000-0000-4000-8000-000000000004',
+   'Илья Громов',jsonb_build_object('short_id','PRB-218'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000002','created','30000000-0000-4000-8000-000000000001',
+   'Анна Котова',jsonb_build_object('short_id','PRB-204'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000003','created','30000000-0000-4000-8000-000000000002',
+   'Дмитрий Орлов',jsonb_build_object('short_id','PRB-197'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000004','created','30000000-0000-4000-8000-000000000005',
+   'Ольга Петрова',jsonb_build_object('short_id','PRB-186'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000005','created','30000000-0000-4000-8000-000000000003',
+   'Мария Зайцева',jsonb_build_object('short_id','PRB-179'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000006','created','30000000-0000-4000-8000-000000000008',
+   'Елена Соколова',jsonb_build_object('short_id','PRB-172'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000007','created','30000000-0000-4000-8000-000000000002',
+   'Дмитрий Орлов',jsonb_build_object('short_id','PRB-165'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000008','created','30000000-0000-4000-8000-000000000006',
+   'Сергей Белов',jsonb_build_object('short_id','PRB-154'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000009','created','30000000-0000-4000-8000-000000000001',
+   'Анна Котова',jsonb_build_object('short_id','PRB-148'),NULL),
+  ('problem','40000000-0000-4000-8000-000000000010','created','30000000-0000-4000-8000-000000000007',
+   'Никита Волков',jsonb_build_object('short_id','PRB-140'),NULL),
+  ('task','50000000-0000-4000-8000-000000000001','jira_linked','30000000-0000-4000-8000-000000000004',
+   'Илья Громов',jsonb_build_object('jira_issue_key','PAY-3318'),NULL),
+  ('task','50000000-0000-4000-8000-000000000002','jira_linked','30000000-0000-4000-8000-000000000001',
+   'Анна Котова',jsonb_build_object('jira_issue_key','MOB-7741'),NULL),
+  ('task','50000000-0000-4000-8000-000000000003','jira_linked','30000000-0000-4000-8000-000000000004',
+   'Илья Громов',jsonb_build_object('jira_issue_key','PAY-3322'),NULL),
+  ('task','50000000-0000-4000-8000-000000000004','jira_linked','30000000-0000-4000-8000-000000000001',
+   'Анна Котова',jsonb_build_object('jira_issue_key','MOB-7689'),NULL),
+  ('task','50000000-0000-4000-8000-000000000005','jira_linked','30000000-0000-4000-8000-000000000001',
+   'Анна Котова',jsonb_build_object('jira_issue_key','MOB-7691'),NULL),
+  ('task','50000000-0000-4000-8000-000000000006','jira_linked','30000000-0000-4000-8000-000000000002',
+   'Дмитрий Орлов',jsonb_build_object('jira_issue_key','DOC-1129'),NULL),
+  ('task','50000000-0000-4000-8000-000000000007','jira_linked','30000000-0000-4000-8000-000000000005',
+   'Ольга Петрова',jsonb_build_object('jira_issue_key','AUTH-441'),NULL),
+  ('task','50000000-0000-4000-8000-000000000008','jira_linked','30000000-0000-4000-8000-000000000008',
+   'Елена Соколова',jsonb_build_object('jira_issue_key','MOB-7510'),NULL),
+  ('task','50000000-0000-4000-8000-000000000009','jira_linked','30000000-0000-4000-8000-000000000002',
+   'Дмитрий Орлов',jsonb_build_object('jira_issue_key','WEB-2204'),NULL),
+  ('task','50000000-0000-4000-8000-000000000010','jira_linked','30000000-0000-4000-8000-000000000006',
+   'Сергей Белов',jsonb_build_object('jira_issue_key','AN-118'),NULL),
+  ('task','50000000-0000-4000-8000-000000000011','jira_linked','30000000-0000-4000-8000-000000000007',
+   'Никита Волков',jsonb_build_object('jira_issue_key','DOC-1078'),NULL),
+  ('support_ticket',
+   (SELECT id FROM support_tickets WHERE problem_id='40000000-0000-4000-8000-000000000001' AND task_id IS NOT NULL LIMIT 1),
+   'linked','30000000-0000-4000-8000-000000000001','Анна Котова',
+   jsonb_build_object('problem_id','40000000-0000-4000-8000-000000000001'),NULL);
+
+INSERT INTO comments (entity_type,entity_id,author_id,body,is_internal) VALUES
+  ('problem','40000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','Поток обращений по 3DS растёт, уже 1248 за неделю. Эскалируем в Payments.',TRUE),
+  ('problem','40000000-0000-4000-8000-000000000002','30000000-0000-4000-8000-000000000001','FCM token rotation на Android 14 — подтверждаем на 4 устройствах из 5.',TRUE),
+  ('problem','40000000-0000-4000-8000-000000000003','30000000-0000-4000-8000-000000000001','PDF-генератор падает на файлах > 4 МБ из-за OOM. Hotfix готовится.',TRUE),
+  ('problem','40000000-0000-4000-8000-000000000004','30000000-0000-4000-8000-000000000001','Force logout через support tools помогает. Фикс в Q2.',TRUE),
+  ('problem','40000000-0000-4000-8000-000000000009','30000000-0000-4000-8000-000000000001','198 неразобранных тикетов по Invalid VIN. Похоже на новую проблему валидатора.',TRUE);
+
+INSERT INTO ai_suggestions (ticket_id,suggestion_type,suggested_entity_type,suggested_entity_id,confidence,reasoning)
+SELECT st.id,'problem_match','problem',st.problem_id,
+  0.70+(extract(second FROM st.created_at)/250.0),
+  'Совпадение по продукту, платформе и ключевым словам'
+FROM support_tickets st
+WHERE st.requires_research=TRUE AND st.problem_id IS NOT NULL LIMIT 30;
+
+INSERT INTO notifications (user_id,type,title,body,entity_type,entity_id,send_email)
+VALUES
+  ('30000000-0000-4000-8000-000000000004','problem_alert',
+   'Проблема: PRB-218','Оплата полиса ОСАГО зависает на шаге 3DS',
+   'problem','40000000-0000-4000-8000-000000000001',FALSE),
+  ('30000000-0000-4000-8000-000000000001','problem_alert',
+   'Проблема: PRB-204','Не приходят push-уведомления о статусе обращения (Android 14',
+   'problem','40000000-0000-4000-8000-000000000002',FALSE),
+  ('30000000-0000-4000-8000-000000000002','problem_alert',
+   'Проблема: PRB-197','Документы КАСКО не открываются в личном кабинете',
+   'problem','40000000-0000-4000-8000-000000000003',FALSE),
+  ('30000000-0000-4000-8000-000000000005','problem_alert',
+   'Проблема: PRB-186','Ошибка авторизации по СМС после смены номера',
+   'problem','40000000-0000-4000-8000-000000000004',FALSE),
+  ('30000000-0000-4000-8000-000000000002','problem_alert',
+   'Проблема: PRB-165','Backend API возвращает 504 на /policies/list при > 100 полис',
+   'problem','40000000-0000-4000-8000-000000000007',FALSE),
+  ('30000000-0000-4000-8000-000000000004','draft_proposal_received',
+   'Новый черновик задачи','Оператор предложил задачу по PRB-218',
+   'problem','40000000-0000-4000-8000-000000000001',FALSE);
+
+INSERT INTO priority_recalculation_log (entity_type,entity_id,old_priority,new_priority,reason)
+VALUES
+  ('problem','40000000-0000-4000-8000-000000000001','high','critical','WoW ticket delta exceeded threshold'),
+  ('problem','40000000-0000-4000-8000-000000000002','medium','high','WoW ticket delta exceeded threshold'),
+  ('problem','40000000-0000-4000-8000-000000000003','medium','high','WoW ticket delta exceeded threshold'),
+  ('problem','40000000-0000-4000-8000-000000000004','medium','high','WoW ticket delta exceeded threshold');
+
+UPDATE id_sequences SET last_value = (
+  SELECT COALESCE(MAX(CAST(regexp_replace(short_id,'^PROB-','') AS BIGINT)),0)
+  FROM problems WHERE short_id ~ '^PROB-[0-9]+$'
+) WHERE entity_type = 'problem';
+
+UPDATE id_sequences SET last_value = (
+  SELECT COALESCE(MAX(CAST(regexp_replace(short_id,'^[A-Z]+-','') AS BIGINT)),0)
+  FROM tasks WHERE short_id ~ '^[A-Z]+-[0-9]+$'
+) WHERE entity_type = 'task';
+
+UPDATE id_sequences SET last_value = (
+  SELECT COALESCE(MAX(CAST(regexp_replace(short_id,'^TKT-','') AS BIGINT)),0)
+  FROM support_tickets WHERE short_id ~ '^TKT-[0-9]+$'
+) WHERE entity_type = 'ticket';
 
 REFRESH MATERIALIZED VIEW mv_problem_stats;
+
+DO $$
+DECLARE ct INT; cu INT; cp INT; ctk INT; cts INT; cq INT; cws INT;
+BEGIN
+  SELECT COUNT(*) INTO ct  FROM teams;
+  SELECT COUNT(*) INTO cu  FROM users;
+  SELECT COUNT(*) INTO cp  FROM problems;
+  SELECT COUNT(*) INTO ctk FROM tasks;
+  SELECT COUNT(*) INTO cts FROM support_tickets;
+  SELECT COUNT(*) INTO cq  FROM queue_items;
+  SELECT COUNT(*) INTO cws FROM weekly_snapshots;
+  RAISE NOTICE 'Seed OK — teams:% users:% problems:% tasks:% tickets:% queue_items:% snapshots:%',
+    ct,cu,cp,ctk,cts,cq,cws;
+END;
+$$;
