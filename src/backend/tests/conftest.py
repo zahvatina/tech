@@ -42,6 +42,9 @@ class FakeResult:
     def first(self):
         return self._rows[0] if self._rows else None
 
+    def __iter__(self):
+        return iter(self._rows)
+
 
 class FakeRow(dict):
     """Dict that also supports attribute-style access (matches SQLAlchemy RowMapping)."""
