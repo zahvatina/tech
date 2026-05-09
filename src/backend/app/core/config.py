@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://rmo:rmo@localhost:5432/rmo"
     cors_origins: str = "*"  # comma-separated or *
+    api_key: str = "dev-key"
 
 
 settings = Settings()
