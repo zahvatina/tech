@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rmo-postgres
+    environment:
+      POSTGRES_USER: rmo
+      POSTGRES_PASSWORD: rmo
+      POSTGRES_DB: rmo
+    ports:
+      - "5432:5432"
+    volumes:
+      - rmo_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rmo -d rmo"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  rmo_pgdata:
