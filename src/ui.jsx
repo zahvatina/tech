@@ -128,8 +128,8 @@ const Sparkline = ({ data = [], w = 100, h = 26, accent, fill = true }) => {
 const Kbd = ({ children }) => <span className="kbd">{children}</span>;
 
 /* ─── Btn ─── */
-const Btn = ({ icon, primary, ghost, kbd, children, ...p }) => (
-  <button className={`btn ${primary?"btn-primary":""} ${ghost?"btn-ghost":""}`} {...p}>
+const Btn = ({ icon, primary, ghost, tone, kbd, children, ...p }) => (
+  <button className={`btn ${primary?"btn-primary":""} ${ghost?"btn-ghost":""} ${tone?`btn-${tone}`:""}`} {...p}>
     {icon ? icon : null}
     {children}
     {kbd && <Kbd>{kbd}</Kbd>}

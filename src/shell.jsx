@@ -8,6 +8,7 @@ const NAV = [
   { id: "tickets",   label: "Tickets",   icon: "ticket",    count: 4218 },
 ];
 const NAV2 = [
+  { id: "rmo",       label: "РМО",       icon: "team" },
   { id: "products",  label: "Products",  icon: "product" },
   { id: "teams",     label: "Teams",     icon: "team" },
   { id: "insights",  label: "Insights",  icon: "insight" },
@@ -45,7 +46,7 @@ const Sidebar = ({ route, go, openCmd }) => (
       {NAV2.map(n => {
         const I = Icons[n.icon];
         return (
-          <button key={n.id} className="sb-link" onClick={() => go({ view: n.id })}>
+          <button key={n.id} className={`sb-link ${route.view===n.id?"active":""}`} onClick={() => go({ view: n.id })}>
             <I/><span>{n.label}</span>
           </button>
         );

@@ -54,6 +54,7 @@ function App() {
   else if (route.view === "triage") content = <Triage go={go}/>;
   else if (route.view === "bugs") content = <BugsList go={go}/>;
   else if (route.view === "tickets") content = <TicketsList go={go}/>;
+  else if (route.view === "rmo") content = <RmoSpace go={go}/>;
   else content = <Stub title={route.view} sub="Скелет раздела"/>;
 
   return (

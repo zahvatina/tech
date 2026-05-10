@@ -1,5 +1,34 @@
 /* VECTOR — Problem detail page */
 
+/* ─── Task status maps ─── */
+const TASK_STATUS_TONE = {
+  draft:                "mute",
+  review:               "warning",
+  pending_confirmation: "warning",
+  blocked:              "critical",
+  rejected_draft:       "critical",
+  open:                 "high",
+  in_progress:          "info",
+  waiting_fix:          "warning",
+  monitoring:           "ok",
+  fixed:                "ok",
+  closed:               "mute",
+};
+const TASK_STATUS_LABEL = {
+  draft:                "Черновик",
+  review:               "На проверке",
+  pending_confirmation: "На проверке",
+  blocked:              "Отклонён",
+  rejected_draft:       "Отклонён",
+  open:                 "Открыт",
+  in_progress:          "В работе",
+  waiting_fix:          "Ожидает фикса",
+  monitoring:           "Мониторинг",
+  fixed:                "Исправлен",
+  closed:               "Закрыт",
+};
+
+/* ─── ProblemDetail (main) ─── */
 const ProblemDetail = ({ problemId, route, go }) => {
   const [p, setP] = React.useState(PROBLEMS.find(x => x.id === problemId) || null);
   const [bugs, setBugs] = React.useState(p ? BUGS.filter(b => b.problemId === problemId) : []);
@@ -8,6 +37,12 @@ const ProblemDetail = ({ problemId, route, go }) => {
   const [tab, setTab] = React.useState(route.tab || "overview");
 
   React.useEffect(() => { if (route.tab) setTab(route.tab); }, [route.tab]);
+
+  const refreshBugs = React.useCallback(() => {
+    API.tasks.list(problemId)
+      .then(tasks => setBugs(tasks))
+      .catch(() => setBugs(BUGS.filter(b => b.problemId === problemId)));
+  }, [problemId]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -34,13 +69,15 @@ const ProblemDetail = ({ problemId, route, go }) => {
   if (!p) return <div className="empty">Загрузка…</div>;
 
   const noBugTickets = tickets.filter(t => !t.bugId && !t.task_id);
+  const pendingBugs = bugs.filter(b => b.status === "review" || b.status === "pending_confirmation");
 
   const TABS = [
-    { id: "overview", label: "Обзор", ct: null },
-    { id: "bugs",     label: "Баги", ct: bugs.length },
-    { id: "tickets",  label: "Обращения", ct: tickets.length },
+    { id: "overview", label: "Обзор",      ct: null },
+    { id: "bugs",     label: "Баги",       ct: bugs.length },
+    { id: "tickets",  label: "Обращения",  ct: tickets.length },
     { id: "activity", label: "Активность", ct: activity.length || null },
-    { id: "linked",   label: "Связи", ct: bugs.length + 2 },
+    { id: "team",     label: "Команда",    ct: pendingBugs.length || null },
+    { id: "linked",   label: "Связи",      ct: bugs.length + 2 },
   ];
 
   return (
@@ -74,9 +111,10 @@ const ProblemDetail = ({ problemId, route, go }) => {
 
         <div className="det-pane">
           {tab === "overview" && <ProblemOverview problem={p} bugs={bugs} tickets={tickets} go={go}/>}
-          {tab === "bugs"     && <ProblemBugs problem={p} bugs={bugs} go={go} focus={route.focus}/>}
+          {tab === "bugs"     && <ProblemBugs problem={p} bugs={bugs} go={go} focus={route.focus} onRefresh={refreshBugs}/>}
           {tab === "tickets"  && <ProblemTickets problem={p} tickets={tickets} bugs={bugs}/>}
           {tab === "activity" && <ProblemActivity problem={p} bugs={bugs} activity={activity}/>}
+          {tab === "team"     && <ProblemTeam problem={p} bugs={bugs} onRefresh={refreshBugs}/>}
           {tab === "linked"   && <ProblemLinked problem={p} bugs={bugs} tickets={tickets}/>}
         </div>
       </div>
@@ -142,8 +180,7 @@ const ProblemDetail = ({ problemId, route, go }) => {
   );
 };
 
-/* ─── Tabs ─── */
-
+/* ─── Overview tab ─── */
 const ProblemOverview = ({ problem: p, bugs, tickets, go }) => {
   const noBug = tickets.filter(t => !t.bugId).length;
   const fix = bugs.find(b => b.workaround);
@@ -244,109 +281,523 @@ const KpiMini = ({ label, value, delta, sub, critical }) => (
   </div>
 );
 
-const ProblemBugs = ({ problem: p, bugs, focus, go }) => (
-  <>
-    <div className="row" style={{ marginBottom: 12 }}>
-      <h3 style={{ margin: 0, font: "600 13px var(--sans)" }}>Баги в этой проблеме</h3>
-      <span className="faint" style={{ fontSize: 12 }}>· {bugs.filter(b => b.workaround).length} с workaround · {bugs.filter(b => !b.fixDate).length} в работе</span>
-      <div className="grow"/>
-      <Btn primary icon={<Icons.plus/>}>Завести баг</Btn>
-    </div>
-    {bugs.length === 0 && <div className="empty"><h4>Пока нет багов</h4><div>Похоже, проблема ещё на стадии исследования. Привяжите баг или создайте новый.</div></div>}
-    <div className="col" style={{ gap: 12 }}>
-      {bugs.map(b => <BugCard key={b.id} bug={b} highlight={focus===b.id}/>)}
-    </div>
-  </>
-);
+/* ─── Bugs tab ─── */
+const ProblemBugs = ({ problem: p, bugs, focus, go, onRefresh }) => {
+  const [showForm, setShowForm] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
+  const [form, setForm] = React.useState({ title: "", task_type: "bug", workaround: "", support_notes: "" });
 
-const BugRow = ({ bug }) => (
-  <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line-soft)" }}>
-    <div className="row" style={{ alignItems: "flex-start" }}>
-      <span className={`indicator ${SEV_LABELS[bug.severity].tone}`} style={{ marginTop: 4 }}/>
-      <div className="grow" style={{ minWidth: 0 }}>
-        <div className="row" style={{ gap: 6 }}>
-          <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{bug.id}</span>
-          <span style={{ fontWeight: 500, fontSize: 13 }}>{bug.title}</span>
-        </div>
-        <div className="row" style={{ marginTop: 4, gap: 6 }}>
-          <SeverityBadge s={bug.severity}/>
-          <Badge tone={bug.status==="fixed"?"ok":bug.status==="blocked"?"critical":"high"} dot>{bug.status}</Badge>
-          <span className="chip"><Icons.team/> {bug.team}</span>
-          <span className="chip">{bug.jira}</span>
-          {bug.workaround && <span className="bdg bdg-ok"><Icons.shield/>workaround</span>}
-        </div>
-      </div>
-      <div style={{ textAlign: "right" }}>
-        <div style={{ font: "500 12px var(--mono)" }}>{bug.tickets}</div>
-        <div className="faint" style={{ fontSize: 11 }}>тикетов</div>
-      </div>
-    </div>
-  </div>
-);
+  const handleCreate = async () => {
+    if (!form.title.trim()) return;
+    setCreating(true);
+    try {
+      await API.tasks.create({
+        problem_id: p.id,
+        title: form.title,
+        task_type: form.task_type,
+        workaround: form.workaround || null,
+        support_notes: form.support_notes || null,
+      });
+      setShowForm(false);
+      setForm({ title: "", task_type: "bug", workaround: "", support_notes: "" });
+      onRefresh?.();
+    } catch (e) {
+      alert("Ошибка создания задачи: " + e.message);
+    } finally {
+      setCreating(false);
+    }
+  };
 
-const BugCard = ({ bug, highlight }) => (
-  <div className="card" style={{ outline: highlight ? "1px solid var(--accent)" : "none" }}>
-    <div className="card-hd">
-      <div className="ttl">
-        <span className={`indicator ${SEV_LABELS[bug.severity].tone}`}/>
-        <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{bug.id}</span>
-        <span>{bug.title}</span>
+  return (
+    <>
+      <div className="row" style={{ marginBottom: 12 }}>
+        <h3 style={{ margin: 0, font: "600 13px var(--sans)" }}>Баги в этой проблеме</h3>
+        <span className="faint" style={{ fontSize: 12 }}>
+          · {bugs.filter(b => b.workaround).length} с workaround
+          · {bugs.filter(b => !b.fixDate && !b.fix_date).length} в работе
+        </span>
+        <div className="grow"/>
+        <Btn primary icon={<Icons.plus/>} onClick={() => setShowForm(f => !f)}>Завести баг</Btn>
       </div>
-      <div className="row" style={{ gap: 6 }}>
-        <SeverityBadge s={bug.severity}/>
-        <Badge tone={bug.status==="fixed"?"ok":bug.status==="blocked"?"critical":"high"} dot>{bug.status}</Badge>
-        <Avatar user={bug.owner} size="sm"/>
-      </div>
-    </div>
-    <div className="card-bd col" style={{ gap: 8 }}>
-      <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
-        <span className="chip"><Icons.team/> {bug.team}</span>
-        <span className="chip"><Icons.link/> {bug.jira}</span>
-        {bug.fixDate && <span className="chip"><Icons.check/> fix {bug.fixDate}</span>}
-        {bug.environments.map(e => <span key={e} className="chip">{e}</span>)}
-        <span className="chip"><Icons.ticket/> {bug.tickets} обращений</span>
-      </div>
-      <div>
-        <div style={{ font: "500 10px var(--mono)", color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>
-          Workaround
-        </div>
-        {bug.workaround
-          ? <div className="row" style={{ alignItems: "flex-start", gap: 8, padding: 10, background: "var(--ok-bg)", borderRadius: 6 }}>
-              <span style={{ color: "var(--ok)", marginTop: 2 }}><Icons.shield/></span>
-              <span style={{ fontSize: 13 }}>{bug.workaround}</span>
+
+      {showForm && (
+        <div className="card" style={{ marginBottom: 16, border: "1px solid var(--accent)" }}>
+          <div className="card-hd">
+            <div className="ttl"><Icons.bug/>Новый черновик задачи</div>
+            <button className="btn btn-ghost btn-icon" onClick={() => setShowForm(false)}><Icons.close/></button>
+          </div>
+          <div className="card-bd col" style={{ gap: 10 }}>
+            <div>
+              <div className="faint" style={{ fontSize: 11, marginBottom: 4 }}>Название *</div>
+              <input
+                className="inp"
+                placeholder="Кратко опишите баг или задачу…"
+                value={form.title}
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+              />
             </div>
-          : <div className="row" style={{ alignItems: "flex-start", gap: 8, padding: 10, background: "var(--critical-bg)", borderRadius: 6 }}>
-              <span style={{ color: "var(--critical)", marginTop: 2 }}><Icons.alert/></span>
-              <span style={{ fontSize: 13 }}>Workaround не задан — саппорт не знает, что отвечать клиенту</span>
-            </div>}
+            <div>
+              <div className="faint" style={{ fontSize: 11, marginBottom: 4 }}>Тип задачи</div>
+              <select
+                className="inp"
+                value={form.task_type}
+                onChange={e => setForm(f => ({ ...f, task_type: e.target.value }))}
+              >
+                <option value="bug">Bug</option>
+                <option value="ui_debt">UI Debt</option>
+                <option value="cjm_debt">CJM Debt</option>
+              </select>
+            </div>
+            <div>
+              <div className="faint" style={{ fontSize: 11, marginBottom: 4 }}>Workaround (как помочь клиенту прямо сейчас)</div>
+              <textarea
+                className="inp"
+                rows={2}
+                placeholder="Что посоветовать клиенту до исправления…"
+                value={form.workaround}
+                onChange={e => setForm(f => ({ ...f, workaround: e.target.value }))}
+                style={{ resize: "vertical" }}
+              />
+            </div>
+            <div>
+              <div className="row" style={{ gap: 6, marginBottom: 4 }}>
+                <span className="faint" style={{ fontSize: 11 }}>Рекомендация саппорту (support_notes)</span>
+                <span className="bdg bdg-critical" style={{ fontSize: 10 }}>обязательно</span>
+              </div>
+              <textarea
+                className="inp"
+                rows={2}
+                placeholder="Что именно говорить клиенту, на что ссылаться…"
+                value={form.support_notes}
+                onChange={e => setForm(f => ({ ...f, support_notes: e.target.value }))}
+                style={{ resize: "vertical" }}
+              />
+            </div>
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+              <Btn ghost onClick={() => setShowForm(false)} disabled={creating}>Отмена</Btn>
+              <Btn primary icon={<Icons.plus/>} onClick={handleCreate} disabled={creating || !form.title.trim()}>
+                {creating ? "Создаём…" : "Создать черновик"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bugs.length === 0 && !showForm && (
+        <div className="empty">
+          <h4>Пока нет багов</h4>
+          <div>Похоже, проблема ещё на стадии исследования. Привяжите баг или создайте новый.</div>
+        </div>
+      )}
+      <div className="col" style={{ gap: 12 }}>
+        {bugs.map(b => <BugCard key={b.id} bug={b} highlight={focus===b.id} onRefresh={onRefresh}/>)}
       </div>
-      <div>
-        <div style={{ font: "500 10px var(--mono)", color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>Root cause</div>
-        <div style={{ fontSize: 13, color: "var(--fg-mute)" }}>{bug.rootCause}</div>
-      </div>
-      <div>
-        <div style={{ font: "500 10px var(--mono)", color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>Рекомендация саппорту</div>
-        <div style={{ fontSize: 13 }}>{bug.recommendation}</div>
+    </>
+  );
+};
+
+/* ─── BugRow (compact, read-only) ─── */
+const BugRow = ({ bug }) => {
+  const status = bug.status || "open";
+  return (
+    <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line-soft)" }}>
+      <div className="row" style={{ alignItems: "flex-start" }}>
+        <span className={`indicator ${SEV_LABELS[bug.severity]?.tone || "mute"}`} style={{ marginTop: 4 }}/>
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div className="row" style={{ gap: 6 }}>
+            <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{bug.id}</span>
+            <span style={{ fontWeight: 500, fontSize: 13 }}>{bug.title}</span>
+          </div>
+          <div className="row" style={{ marginTop: 4, gap: 6 }}>
+            <SeverityBadge s={bug.severity}/>
+            <Badge tone={TASK_STATUS_TONE[status] || "high"} dot>{TASK_STATUS_LABEL[status] || status}</Badge>
+            <span className="chip"><Icons.team/> {bug.team}</span>
+            {bug.jira && <span className="chip">{bug.jira}</span>}
+            {bug.workaround && <span className="bdg bdg-ok"><Icons.shield/>workaround</span>}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ font: "500 12px var(--mono)" }}>{bug.tickets}</div>
+          <div className="faint" style={{ fontSize: 11 }}>тикетов</div>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
+/* ─── BugCard (full, with draft workflow actions) ─── */
+const BugCard = ({ bug, highlight, onRefresh }) => {
+  const [acting, setActing] = React.useState(false);
+  const [showReject, setShowReject] = React.useState(false);
+  const [rejectComment, setRejectComment] = React.useState("");
+
+  const status = bug.status || "open";
+  const statusTone = TASK_STATUS_TONE[status] || "high";
+  const statusLabel = TASK_STATUS_LABEL[status] || status;
+  const isDraft    = status === "draft";
+  const isReview   = status === "review" || status === "pending_confirmation";
+  const isRejected = status === "blocked" || status === "rejected_draft";
+
+  const act = (fn) => async () => {
+    setActing(true);
+    try { await fn(); onRefresh?.(); }
+    catch (e) { alert(e.message); }
+    finally { setActing(false); }
+  };
+
+  const doSubmit = act(() => API.tasks.submitForReview(bug.id, {}));
+  const doConfirm = act(() => API.tasks.confirm(bug.id, {}));
+
+  const doReject = async () => {
+    if (!rejectComment.trim()) return;
+    setActing(true);
+    try {
+      await API.tasks.reject(bug.id, { review_comment: rejectComment });
+      setShowReject(false);
+      setRejectComment("");
+      onRefresh?.();
+    } catch (e) { alert(e.message); }
+    finally { setActing(false); }
+  };
+
+  return (
+    <div className="card" style={{ outline: highlight ? "1px solid var(--accent)" : "none" }}>
+      <div className="card-hd">
+        <div className="ttl">
+          <span className={`indicator ${SEV_LABELS[bug.severity]?.tone || "mute"}`}/>
+          <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{bug.id}</span>
+          <span>{bug.title}</span>
+        </div>
+        <div className="row" style={{ gap: 6 }}>
+          <SeverityBadge s={bug.severity}/>
+          <Badge tone={statusTone} dot>{statusLabel}</Badge>
+          <Avatar user={bug.owner} size="sm"/>
+        </div>
+      </div>
+
+      <div className="card-bd col" style={{ gap: 8 }}>
+        <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+          {bug.team && <span className="chip"><Icons.team/> {bug.team}</span>}
+          {bug.jira && <span className="chip"><Icons.link/> {bug.jira}</span>}
+          {(bug.fixDate || bug.fix_date) && <span className="chip"><Icons.check/> fix {bug.fixDate || bug.fix_date}</span>}
+          {(bug.environments || []).map(e => <span key={e} className="chip">{e}</span>)}
+          {bug.tickets != null && <span className="chip"><Icons.ticket/> {bug.tickets} обращений</span>}
+        </div>
+
+        <div>
+          <div style={{ font: "500 10px var(--mono)", color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>
+            Workaround
+          </div>
+          {bug.workaround
+            ? <div className="row" style={{ alignItems: "flex-start", gap: 8, padding: 10, background: "var(--ok-bg)", borderRadius: 6 }}>
+                <span style={{ color: "var(--ok)", marginTop: 2 }}><Icons.shield/></span>
+                <span style={{ fontSize: 13 }}>{bug.workaround}</span>
+              </div>
+            : <div className="row" style={{ alignItems: "flex-start", gap: 8, padding: 10, background: "var(--critical-bg)", borderRadius: 6 }}>
+                <span style={{ color: "var(--critical)", marginTop: 2 }}><Icons.alert/></span>
+                <span style={{ fontSize: 13 }}>Workaround не задан — саппорт не знает, что отвечать клиенту</span>
+              </div>}
+        </div>
+
+        {bug.rootCause && (
+          <div>
+            <div style={{ font: "500 10px var(--mono)", color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>Root cause</div>
+            <div style={{ fontSize: 13, color: "var(--fg-mute)" }}>{bug.rootCause}</div>
+          </div>
+        )}
+
+        {bug.recommendation && (
+          <div>
+            <div style={{ font: "500 10px var(--mono)", color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>Рекомендация саппорту</div>
+            <div style={{ fontSize: 13 }}>{bug.recommendation}</div>
+          </div>
+        )}
+
+        {/* Draft: rejected reason */}
+        {isRejected && bug.review_comment && (
+          <div className="row" style={{ gap: 8, padding: "8px 10px", background: "var(--critical-bg)", borderRadius: 6 }}>
+            <Icons.alert/>
+            <span style={{ fontSize: 12.5, color: "var(--critical)" }}>{bug.review_comment}</span>
+          </div>
+        )}
+
+        {/* Draft workflow action row */}
+        {(isDraft || isRejected) && (
+          <div className="row" style={{ gap: 8, paddingTop: 8, borderTop: "1px solid var(--line-soft)", marginTop: 4 }}>
+            <div className="grow"/>
+            <Btn primary icon={<Icons.arrowUp/>} onClick={doSubmit} disabled={acting}>
+              {isRejected ? "Отправить повторно" : "На проверку команды"}
+            </Btn>
+          </div>
+        )}
+
+        {isReview && !showReject && (
+          <div className="row" style={{ gap: 8, paddingTop: 8, borderTop: "1px solid var(--line-soft)", marginTop: 4 }}>
+            <div className="grow"/>
+            <Btn ghost onClick={() => setShowReject(true)} disabled={acting}>
+              <Icons.close/> Отклонить
+            </Btn>
+            <Btn tone="ok" icon={<Icons.check/>} onClick={doConfirm} disabled={acting}>
+              Подтвердить
+            </Btn>
+          </div>
+        )}
+
+        {isReview && showReject && (
+          <div className="col" style={{ gap: 8, paddingTop: 8, borderTop: "1px solid var(--line-soft)", marginTop: 4 }}>
+            <div className="faint" style={{ fontSize: 12 }}>Причина отклонения:</div>
+            <textarea
+              className="inp"
+              rows={2}
+              placeholder="Что нужно доработать…"
+              value={rejectComment}
+              onChange={e => setRejectComment(e.target.value)}
+              style={{ resize: "vertical" }}
+            />
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+              <Btn ghost onClick={() => { setShowReject(false); setRejectComment(""); }} disabled={acting}>Отмена</Btn>
+              <Btn tone="critical" onClick={doReject} disabled={acting || !rejectComment.trim()}>
+                Отклонить
+              </Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ─── Team tab ─── */
+const ProblemTeam = ({ problem: p, bugs, onRefresh }) => {
+  const pending   = bugs.filter(b => b.status === "review" || b.status === "pending_confirmation");
+  const drafts    = bugs.filter(b => b.status === "draft");
+  const rejected  = bugs.filter(b => b.status === "blocked" || b.status === "rejected_draft");
+  /* only warn about missing notes for active tasks (not drafts or under review) */
+  const activeSt = new Set(["open","in_progress","waiting_fix","monitoring"]);
+  const missingNotes = bugs.filter(b => activeSt.has(b.status) && !b.recommendation && !b.workaround);
+
+  /* Triage SLA progress bar */
+  const slaDeadline = p.triage_sla_deadline;
+  let slaHoursLeft = null, slaProgress = 0;
+  if (slaDeadline) {
+    const now = Date.now();
+    const deadline = new Date(slaDeadline).getTime();
+    const created = p.created_at ? new Date(p.created_at).getTime() : now - 24 * 3600_000;
+    slaHoursLeft = Math.max(0, Math.round((deadline - now) / 3_600_000));
+    slaProgress  = Math.min(1, Math.max(0, (now - created) / (deadline - created)));
+  }
+
+  const [acting, setActing] = React.useState({});
+  const [showRejectFor, setShowRejectFor] = React.useState(null);
+  const [rejectComments, setRejectComments] = React.useState({});
+
+  const doConfirm = async (bug) => {
+    setActing(a => ({ ...a, [bug.id]: true }));
+    try { await API.tasks.confirm(bug.id, {}); onRefresh?.(); }
+    catch (e) { alert(e.message); }
+    finally { setActing(a => ({ ...a, [bug.id]: false })); }
+  };
+
+  const doReject = async (bug) => {
+    const comment = (rejectComments[bug.id] || "").trim();
+    if (!comment) return;
+    setActing(a => ({ ...a, [bug.id]: true }));
+    try {
+      await API.tasks.reject(bug.id, { review_comment: comment });
+      setShowRejectFor(null);
+      onRefresh?.();
+    } catch (e) { alert(e.message); }
+    finally { setActing(a => ({ ...a, [bug.id]: false })); }
+  };
+
+  const allClear = !slaDeadline && pending.length === 0 && missingNotes.length === 0 && drafts.length === 0 && rejected.length === 0;
+
+  return (
+    <div className="col" style={{ gap: 20 }}>
+
+      {/* Triage SLA */}
+      {slaDeadline && (
+        <div className="card" style={{ border: `1px solid ${slaHoursLeft < 4 ? "var(--critical)" : "var(--high)"}` }}>
+          <div className="card-hd">
+            <div className="ttl"><Icons.clock/>Triage SLA</div>
+            <Badge tone={slaHoursLeft < 4 ? "critical" : slaHoursLeft < 12 ? "high" : "warning"} dot>
+              {slaHoursLeft} ч осталось
+            </Badge>
+          </div>
+          <div className="card-bd">
+            <div style={{ height: 6, background: "var(--line)", borderRadius: 3, overflow: "hidden", marginBottom: 8 }}>
+              <div style={{
+                height: "100%",
+                width: `${Math.round(slaProgress * 100)}%`,
+                background: slaHoursLeft < 4 ? "var(--critical)" : slaHoursLeft < 12 ? "var(--high)" : "var(--accent)",
+                borderRadius: 3,
+              }}/>
+            </div>
+            <div className="faint" style={{ fontSize: 12 }}>
+              Проблема должна перейти из «new» в «in_progress» до истечения SLA (1 день с момента создания)
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending confirmation */}
+      <div>
+        <div className="row" style={{ marginBottom: 10, gap: 8 }}>
+          <h3 style={{ margin: 0, font: "600 13px var(--sans)" }}>Ожидают подтверждения</h3>
+          {pending.length > 0 && <Badge tone="warning" dot>{pending.length}</Badge>}
+        </div>
+        {pending.length === 0
+          ? <div className="empty muted" style={{ padding: "12px 0" }}>Нет задач на подтверждении</div>
+          : <div className="col" style={{ gap: 8 }}>
+              {pending.map(bug => (
+                <div key={bug.id} className="card" style={{ border: "1px solid color-mix(in oklch, var(--high) 40%, transparent)" }}>
+                  <div className="card-hd">
+                    <div className="ttl">
+                      <span className={`indicator ${SEV_LABELS[bug.severity]?.tone || "mute"}`}/>
+                      <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{bug.id}</span>
+                      <span>{bug.title}</span>
+                      {bug.task_type && <span className="chip">{bug.task_type}</span>}
+                    </div>
+                    <div className="row" style={{ gap: 6 }}>
+                      <Badge tone="warning" dot>На проверке</Badge>
+                      {bug.team && <span className="chip"><Icons.team/> {bug.team}</span>}
+                    </div>
+                  </div>
+                  {bug.workaround && (
+                    <div className="card-bd" style={{ paddingTop: 0, paddingBottom: 8 }}>
+                      <div className="row" style={{ gap: 6, fontSize: 12.5, padding: "6px 10px", background: "var(--ok-bg)", borderRadius: 6 }}>
+                        <Icons.shield/><span style={{ color: "var(--fg-mute)" }}>{bug.workaround}</span>
+                      </div>
+                    </div>
+                  )}
+                  {showRejectFor !== bug.id
+                    ? (
+                      <div className="row" style={{ gap: 8, padding: "0 14px 12px", justifyContent: "flex-end" }}>
+                        <Btn ghost onClick={() => setShowRejectFor(bug.id)} disabled={acting[bug.id]}>
+                          <Icons.close/> Отклонить
+                        </Btn>
+                        <Btn tone="ok" icon={<Icons.check/>} onClick={() => doConfirm(bug)} disabled={acting[bug.id]}>
+                          Подтвердить
+                        </Btn>
+                      </div>
+                    ) : (
+                      <div className="col" style={{ gap: 8, padding: "0 14px 12px" }}>
+                        <textarea
+                          className="inp"
+                          rows={2}
+                          placeholder="Причина отклонения…"
+                          value={rejectComments[bug.id] || ""}
+                          onChange={e => setRejectComments(s => ({ ...s, [bug.id]: e.target.value }))}
+                          style={{ resize: "vertical" }}
+                        />
+                        <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                          <Btn ghost onClick={() => setShowRejectFor(null)} disabled={acting[bug.id]}>Отмена</Btn>
+                          <Btn tone="critical" onClick={() => doReject(bug)} disabled={acting[bug.id] || !(rejectComments[bug.id] || "").trim()}>
+                            Отклонить
+                          </Btn>
+                        </div>
+                      </div>
+                    )
+                  }
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+
+      {/* Missing support notes */}
+      {missingNotes.length > 0 && (
+        <div>
+          <div className="row" style={{ marginBottom: 10, gap: 8 }}>
+            <h3 style={{ margin: 0, font: "600 13px var(--sans)" }}>Задачи без рекомендаций</h3>
+            <Badge tone="critical" dot>{missingNotes.length}</Badge>
+          </div>
+          <div style={{ padding: "12px 14px", background: "var(--critical-bg)", borderRadius: 8, border: "1px solid color-mix(in oklch, var(--critical) 30%, transparent)" }}>
+            <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+              <Icons.alert/>
+              <span style={{ fontSize: 13, color: "var(--critical)", fontWeight: 500 }}>
+                Саппорт не знает, что отвечать клиентам по этим задачам
+              </span>
+            </div>
+            <div className="col" style={{ gap: 6 }}>
+              {missingNotes.map(bug => (
+                <div key={bug.id} className="row" style={{ gap: 8, fontSize: 12.5 }}>
+                  <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{bug.id}</span>
+                  <span className="grow">{bug.title}</span>
+                  <Badge tone={TASK_STATUS_TONE[bug.status] || "high"} dot>{TASK_STATUS_LABEL[bug.status] || bug.status}</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Drafts info */}
+      {drafts.length > 0 && (
+        <div>
+          <div className="row" style={{ marginBottom: 10, gap: 8 }}>
+            <h3 style={{ margin: 0, font: "600 13px var(--sans)" }}>Черновики операторов</h3>
+            <span className="faint" style={{ fontSize: 12 }}>· ожидают отправки на проверку</span>
+          </div>
+          <div className="col" style={{ gap: 6 }}>
+            {drafts.map(bug => (
+              <div key={bug.id} className="row" style={{ padding: "10px 14px", border: "1px solid var(--line)", borderRadius: 8, gap: 8 }}>
+                <span className={`indicator ${SEV_LABELS[bug.severity]?.tone || "mute"}`}/>
+                <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{bug.id}</span>
+                <span className="grow" style={{ fontSize: 13 }}>{bug.title}</span>
+                <Badge tone="mute" dot>Черновик</Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Rejected */}
+      {rejected.length > 0 && (
+        <div>
+          <div className="row" style={{ marginBottom: 10 }}>
+            <h3 style={{ margin: 0, font: "600 13px var(--sans)" }}>Отклонённые</h3>
+          </div>
+          <div className="col" style={{ gap: 6 }}>
+            {rejected.map(bug => (
+              <div key={bug.id} className="row" style={{ padding: "10px 14px", border: "1px solid var(--line)", borderRadius: 8, gap: 8 }}>
+                <span className="indicator critical"/>
+                <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{bug.id}</span>
+                <span className="grow" style={{ fontSize: 13 }}>{bug.title}</span>
+                <Badge tone="critical" dot>Отклонён</Badge>
+                {bug.review_comment && <span className="faint" style={{ fontSize: 11.5, maxWidth: 240, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{bug.review_comment}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {allClear && (
+        <div className="empty">
+          <h4>Всё в порядке</h4>
+          <div>Нет задач, требующих внимания команды</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── Tickets tab ─── */
 const ProblemTickets = ({ problem: p, tickets, bugs }) => {
   const [filter, setFilter] = React.useState("all");
   const counts = {
     all: tickets.length,
     "no-bug": tickets.filter(t => !t.bugId).length,
-    new: tickets.filter(t => t.flags.isNew).length,
-    research: tickets.filter(t => t.flags.needsResearch).length,
-    duplicate: tickets.filter(t => t.flags.duplicate).length,
+    new: tickets.filter(t => t.flags?.isNew).length,
+    research: tickets.filter(t => t.flags?.needsResearch).length,
+    duplicate: tickets.filter(t => t.flags?.duplicate).length,
   };
   const filtered = tickets.filter(t => {
     if (filter === "all") return true;
     if (filter === "no-bug") return !t.bugId;
-    if (filter === "new") return t.flags.isNew;
-    if (filter === "research") return t.flags.needsResearch;
-    if (filter === "duplicate") return t.flags.duplicate;
+    if (filter === "new") return t.flags?.isNew;
+    if (filter === "research") return t.flags?.needsResearch;
+    if (filter === "duplicate") return t.flags?.duplicate;
     return true;
   });
   return (
@@ -376,9 +827,9 @@ const ProblemTickets = ({ problem: p, tickets, bugs }) => {
               <td>{t.product}</td>
               <td><span className="row" style={{ gap: 4 }}><PlatformIcon p={t.platform}/><span style={{font:"500 11px var(--mono)"}}>{t.platform}</span></span></td>
               <td className="muted">{t.region}</td>
-              <td><Badge tone={TICKET_STATUS[t.status].tone} dot>{TICKET_STATUS[t.status].label}</Badge></td>
+              <td><Badge tone={TICKET_STATUS[t.status]?.tone || "mute"} dot>{TICKET_STATUS[t.status]?.label || t.status}</Badge></td>
               <td>{t.bugId ? <span className="chip">{t.bugId}</span> : <span className="bdg bdg-mute">—</span>}</td>
-              <td className="muted" style={{ fontSize: 11.5 }}>{t.created.slice(5,10)} {t.created.slice(11,16)}</td>
+              <td className="muted" style={{ fontSize: 11.5 }}>{t.created?.slice(5,10)} {t.created?.slice(11,16)}</td>
             </tr>
           ))}
         </tbody>
@@ -388,6 +839,7 @@ const ProblemTickets = ({ problem: p, tickets, bugs }) => {
   );
 };
 
+/* ─── Activity tab ─── */
 const ACTIVITY_KIND = {
   "status_change": "evt-status",
   "comment":       "evt-comment",
@@ -396,15 +848,12 @@ const ACTIVITY_KIND = {
 };
 
 const ProblemActivity = ({ problem: p, bugs, activity }) => {
-  const entries = activity && activity.length > 0 ? activity : null;
-
-  if (!entries) return (
+  if (!activity || activity.length === 0) return (
     <div className="empty muted">Нет данных активности</div>
   );
-
   return (
     <div className="tl">
-      {entries.map((e, i) => {
+      {activity.map((e, i) => {
         const kind = ACTIVITY_KIND[e.action] || "evt-status";
         const when = e.created_at
           ? new Date(e.created_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
@@ -425,6 +874,7 @@ const ProblemActivity = ({ problem: p, bugs, activity }) => {
   );
 };
 
+/* ─── Linked tab ─── */
 const ProblemLinked = ({ problem: p, bugs, tickets }) => (
   <>
     <div className="card" style={{ marginBottom: 16 }}>
@@ -456,13 +906,14 @@ const ProblemLinked = ({ problem: p, bugs, tickets }) => (
   </>
 );
 
+/* ─── Shared sub-components ─── */
 const TicketRow = ({ ticket: t }) => (
   <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line-soft)" }}>
     <div className="row" style={{ alignItems: "flex-start" }}>
       <div className="grow" style={{ minWidth: 0 }}>
         <div className="row" style={{ gap: 6 }}>
           <span className="id" style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{t.id}</span>
-          <Badge tone={TICKET_STATUS[t.status].tone} dot>{TICKET_STATUS[t.status].label}</Badge>
+          <Badge tone={TICKET_STATUS[t.status]?.tone || "mute"} dot>{TICKET_STATUS[t.status]?.label || t.status}</Badge>
         </div>
         <div style={{ fontSize: 12.5, color: "var(--fg)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {t.summary}
@@ -478,7 +929,6 @@ const TicketRow = ({ ticket: t }) => (
   </div>
 );
 
-/* ─── Relation graph ─── */
 const RelationGraph = ({ problem, bugs, tickets, large }) => {
   const W = 720, H = large ? 320 : 240;
   const cx = W/2, cy = H/2;
@@ -502,24 +952,20 @@ const RelationGraph = ({ problem, bugs, tickets, large }) => {
         </radialGradient>
       </defs>
       <circle cx={cx} cy={cy} r="60" fill="url(#prob-glow)"/>
-      {/* edges problem → bugs */}
       {bugPos.map((b, i) => (
         <line key={`pb${i}`} x1={cx} y1={cy} x2={b[0]} y2={b[1]} stroke="var(--line)" strokeWidth="1.2"/>
       ))}
-      {/* edges bug ↔ ticket (only some) */}
       {ticketPositions.map((tp, i) => {
         const t = tickets[i];
         const target = t && t.bugId ? bugPos[bugs.findIndex(b => b.id === t.bugId)] : [cx, cy];
         if (!target) return null;
         return <line key={`bt${i}`} x1={target[0]} y1={target[1]} x2={tp[0]} y2={tp[1]} stroke="var(--line-soft)" strokeWidth="1" strokeDasharray={t && !t.bugId ? "2 3" : ""}/>;
       })}
-      {/* problem center */}
       <circle cx={cx} cy={cy} r="22" fill="var(--accent)" stroke="var(--bg)" strokeWidth="2"/>
       <text x={cx} y={cy+1} textAnchor="middle" dominantBaseline="middle" fontSize="11" fontFamily="Geist Mono, monospace" fontWeight="600" fill="var(--accent-ink)">{problem.id}</text>
-      {/* bugs */}
       {bugs.map((b, i) => {
         const [x, y] = bugPos[i];
-        const tone = SEV_LABELS[b.severity].tone;
+        const tone = SEV_LABELS[b.severity]?.tone || "mute";
         const color = `var(--${tone})`;
         return (
           <g key={b.id}>
@@ -528,12 +974,10 @@ const RelationGraph = ({ problem, bugs, tickets, large }) => {
           </g>
         );
       })}
-      {/* tickets */}
       {ticketPositions.map((tp, i) => {
         const t = tickets[i];
         return <circle key={i} cx={tp[0]} cy={tp[1]} r="4" fill={t && t.bugId ? "var(--info)" : "var(--high)"} stroke="var(--bg)" strokeWidth="1.5"/>;
       })}
-      {/* legend */}
       <g transform={`translate(16, ${H-44})`} fontSize="10" fontFamily="Geist, sans-serif" fill="var(--fg-mute)">
         <circle cx="6" cy="6" r="6" fill="var(--accent)"/><text x="18" y="9">Проблема</text>
         <circle cx="86" cy="6" r="6" fill="var(--critical)"/><text x="98" y="9">Баг</text>
@@ -544,6 +988,151 @@ const RelationGraph = ({ problem, bugs, tickets, large }) => {
   );
 };
 
+/* ─── RmoSpace — standalone screen, all pending tasks across problems ─── */
+const RmoSpace = ({ go }) => {
+  const [tasks, setTasks] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const loadTasks = React.useCallback(() => {
+    setLoading(true);
+    API.tasks.listAll({ status: ["pending_confirmation"], limit: 100 })
+      .then(data => setTasks(data))
+      .catch(() => setTasks([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  React.useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  const [acting, setActing] = React.useState({});
+  const [showRejectFor, setShowRejectFor] = React.useState(null);
+  const [rejectComments, setRejectComments] = React.useState({});
+
+  const doConfirm = async (task) => {
+    setActing(a => ({ ...a, [task.id]: true }));
+    try { await API.tasks.confirm(task.id, {}); loadTasks(); }
+    catch (e) { alert(e.message); }
+    finally { setActing(a => ({ ...a, [task.id]: false })); }
+  };
+
+  const doReject = async (task) => {
+    const comment = (rejectComments[task.id] || "").trim();
+    if (!comment) return;
+    setActing(a => ({ ...a, [task.id]: true }));
+    try {
+      await API.tasks.reject(task.id, { review_comment: comment });
+      setShowRejectFor(null);
+      loadTasks();
+    } catch (e) { alert(e.message); }
+    finally { setActing(a => ({ ...a, [task.id]: false })); }
+  };
+
+  /* Group tasks by problem */
+  const byProblem = React.useMemo(() => {
+    const map = {};
+    tasks.forEach(t => {
+      const pid = t.problemId || "—";
+      (map[pid] = map[pid] || []).push(t);
+    });
+    return map;
+  }, [tasks]);
+
+  return (
+    <div className="pane">
+      <div className="pane-hd">
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18 }}>РМО-пространство</h2>
+          <div className="faint" style={{ fontSize: 13, marginTop: 2 }}>Задачи, ожидающие подтверждения командой</div>
+        </div>
+        <div className="grow"/>
+        {!loading && tasks.length > 0 && (
+          <Badge tone="warning" dot>{tasks.length} на проверке</Badge>
+        )}
+        <Btn ghost icon={<Icons.spark/>} onClick={loadTasks}>Обновить</Btn>
+      </div>
+
+      {loading && <div className="empty">Загрузка…</div>}
+
+      {!loading && tasks.length === 0 && (
+        <div className="empty">
+          <h4>Нет задач на проверке</h4>
+          <div>Все черновики подтверждены или ещё не отправлены операторами</div>
+        </div>
+      )}
+
+      {!loading && Object.entries(byProblem).map(([pid, ptasks]) => (
+        <div key={pid} style={{ marginBottom: 24 }}>
+          <div className="row" style={{ marginBottom: 10, gap: 8, padding: "0 2px" }}>
+            <span style={{ font: "600 13px var(--mono)", color: "var(--fg-dim)" }}>{pid}</span>
+            <span className="faint" style={{ fontSize: 12 }}>· {ptasks.length} задач на проверке</span>
+            <div className="grow"/>
+            <Btn ghost icon={<Icons.chev/>} onClick={() => go({ view: "problems", detailId: pid, tab: "team" })}>
+              К проблеме
+            </Btn>
+          </div>
+          <div className="col" style={{ gap: 8 }}>
+            {ptasks.map(task => (
+              <div key={task.id} className="card" style={{ border: "1px solid color-mix(in oklch, var(--high) 40%, transparent)" }}>
+                <div className="card-hd">
+                  <div className="ttl">
+                    <span className={`indicator ${SEV_LABELS[task.severity]?.tone || "mute"}`}/>
+                    <span style={{ font: "500 11px var(--mono)", color: "var(--fg-dim)" }}>{task.id}</span>
+                    <span>{task.title}</span>
+                    {task.task_type && <span className="chip">{task.task_type}</span>}
+                  </div>
+                  <div className="row" style={{ gap: 6 }}>
+                    <Badge tone="warning" dot>На проверке</Badge>
+                    {task.team && <span className="chip"><Icons.team/> {task.team}</span>}
+                  </div>
+                </div>
+
+                {task.workaround && (
+                  <div className="card-bd" style={{ paddingTop: 0, paddingBottom: 8 }}>
+                    <div className="row" style={{ gap: 6, fontSize: 12.5, padding: "6px 10px", background: "var(--ok-bg)", borderRadius: 6 }}>
+                      <Icons.shield/><span style={{ color: "var(--fg-mute)" }}>{task.workaround}</span>
+                    </div>
+                  </div>
+                )}
+
+                {showRejectFor !== task.id
+                  ? (
+                    <div className="row" style={{ gap: 8, padding: "0 14px 12px", justifyContent: "flex-end" }}>
+                      <Btn ghost onClick={() => setShowRejectFor(task.id)} disabled={acting[task.id]}>
+                        <Icons.close/> Отклонить
+                      </Btn>
+                      <Btn tone="ok" icon={<Icons.check/>} onClick={() => doConfirm(task)} disabled={acting[task.id]}>
+                        Подтвердить
+                      </Btn>
+                    </div>
+                  ) : (
+                    <div className="col" style={{ gap: 8, padding: "0 14px 12px" }}>
+                      <textarea
+                        className="inp"
+                        rows={2}
+                        placeholder="Причина отклонения…"
+                        value={rejectComments[task.id] || ""}
+                        onChange={e => setRejectComments(s => ({ ...s, [task.id]: e.target.value }))}
+                        style={{ resize: "vertical" }}
+                      />
+                      <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                        <Btn ghost onClick={() => setShowRejectFor(null)} disabled={acting[task.id]}>Отмена</Btn>
+                        <Btn tone="critical" onClick={() => doReject(task)} disabled={acting[task.id] || !(rejectComments[task.id] || "").trim()}>
+                          Отклонить
+                        </Btn>
+                      </div>
+                    </div>
+                  )
+                }
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 Object.assign(window, {
   ProblemDetail, BugRow, BugCard, TicketRow, RelationGraph,
+  ProblemTeam, RmoSpace,
+  TASK_STATUS_TONE, TASK_STATUS_LABEL,
 });
