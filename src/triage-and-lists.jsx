@@ -160,6 +160,13 @@ const TicketDetail = ({ queueItem, queueCode, go }) => {
     setActing(true);
     try { await API.queues.skip(queueCode, queueItem.id); } catch(e) {} finally { setActing(false); }
   };
+  const handleResolve = async () => {
+    setActing(true);
+    try {
+      await API.queues.resolve(queueCode, queueItem.id, "Resolved via triage");
+      go({ view: "triage" });
+    } catch(e) {} finally { setActing(false); }
+  };
 
   return (
     <div>
@@ -175,6 +182,7 @@ const TicketDetail = ({ queueItem, queueCode, go }) => {
           <div style={{ flex: 1 }}/>
           <Btn ghost icon={<Icons.user/>} onClick={handleTake} disabled={acting}>На себя</Btn>
           <Btn ghost icon={<Icons.close/>} onClick={handleSkip} disabled={acting}>Вернуть в очередь</Btn>
+          <Btn tone="ok" icon={<Icons.check/>} onClick={handleResolve} disabled={acting}>Решено</Btn>
           <Btn primary icon={<Icons.link/>}>Привязать</Btn>
         </div>
       </div>
@@ -270,12 +278,16 @@ const BugsList = ({ go }) => {
   React.useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    API.tasks.listAll({ limit: 100 })
+    const params = filter === "no-workaround" ? { has_workaround: false, limit: 100 }
+                 : filter === "blocked"       ? { status: ["blocked", "rejected_draft"], limit: 100 }
+                 : filter === "fixed"         ? { status: ["fixed", "closed"], limit: 100 }
+                 : { limit: 100 };
+    API.tasks.listAll(params)
       .then(data => { if (!cancelled && data.length) setBugs(data); })
       .catch(() => { if (!cancelled) setBugs(BUGS); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [filter]);
 
   const filtered = bugs.filter(b => {
     if (filter === "no-workaround") return !b.workaround;
