@@ -93,7 +93,7 @@ async def create_ticket(body: TicketCreate, session: AsyncSession = Depends(get_
                   customer_name, customer_email, status)
                VALUES
                  (:user_id, :product_id, :platform, :raw_text, :summary,
-                  COALESCE(:ticket_date::timestamptz, NOW()),
+                  COALESCE(CAST(:ticket_date AS timestamptz), NOW()),
                   :channel, :region, :problem_id, :task_id, CAST(:tags AS text[]),
                   :customer_name, :customer_email, 'new')
                RETURNING id::text, short_id"""
