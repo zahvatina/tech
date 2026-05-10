@@ -47,6 +47,16 @@ async function apiFetch(path, opts = {}) {
   return resp.json();
 }
 
+async function apiFetchForm(path, formData) {
+  const resp = await fetch(API_BASE + path, {
+    method: "POST",
+    headers: { "X-API-Key": API_KEY },
+    body: formData,
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} ${path}`);
+  return resp.json();
+}
+
 function buildQS(params) {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -107,6 +117,23 @@ const API = {
       const res = await apiFetch(`/api/v1/tickets/${encodeURIComponent(id)}`);
       return res.data || res;
     },
+    async create(body) {
+      return apiFetch("/api/v1/tickets", { method: "POST", body: JSON.stringify(body) });
+    },
+    async patch(id, body) {
+      return apiFetch(`/api/v1/tickets/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+    },
+    async bulk(body) {
+      return apiFetch("/api/v1/tickets/bulk", { method: "POST", body: JSON.stringify(body) });
+    },
+    async uploadAttachment(id, file, opts = {}) {
+      const fd = new FormData();
+      fd.append("file", file);
+      if (opts.is_log != null)        fd.append("is_log", String(opts.is_log));
+      if (opts.is_screenshot != null) fd.append("is_screenshot", String(opts.is_screenshot));
+      if (opts.uploaded_by)           fd.append("uploaded_by", opts.uploaded_by);
+      return apiFetchForm(`/api/v1/tickets/${encodeURIComponent(id)}/attachments`, fd);
+    },
   },
 
   problems: {
@@ -138,6 +165,40 @@ const API = {
       const res = await apiFetch(`/api/v1/problems/${encodeURIComponent(id)}`);
       return normProblem(res.data || res);
     },
+
+    async create(body) {
+      return apiFetch("/api/v1/problems", { method: "POST", body: JSON.stringify(body) });
+    },
+
+    async patch(id, body) {
+      return apiFetch(`/api/v1/problems/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+    },
+
+    async tickets(id, params = {}) {
+      const res = await apiFetch(`/api/v1/problems/${encodeURIComponent(id)}/tickets${buildQS({ limit: 100, ...params })}`);
+      return { data: res.data || [], meta: res.meta || {} };
+    },
+
+    async activity(id, params = {}) {
+      const res = await apiFetch(`/api/v1/problems/${encodeURIComponent(id)}/activity${buildQS({ limit: 50, ...params })}`);
+      return { data: res.data || [], meta: res.meta || {} };
+    },
+
+    async comments(id) {
+      const res = await apiFetch(`/api/v1/problems/${encodeURIComponent(id)}/comments`);
+      return res.data || [];
+    },
+
+    async postComment(id, body) {
+      return apiFetch(
+        `/api/v1/problems/${encodeURIComponent(id)}/comments`,
+        { method: "POST", body: JSON.stringify(body) },
+      );
+    },
+
+    async bulk(body) {
+      return apiFetch("/api/v1/problems/bulk", { method: "POST", body: JSON.stringify(body) });
+    },
   },
 
   tasks: {
@@ -149,6 +210,108 @@ const API = {
     async listAll(params = {}) {
       const res = await apiFetch(`/api/v1/tasks${buildQS({ limit: 100, ...params })}`);
       return (res.data || []).map(normTask);
+    },
+    async get(id) {
+      const res = await apiFetch(`/api/v1/tasks/${encodeURIComponent(id)}`);
+      return normTask(res.data || res);
+    },
+    async create(body) {
+      return apiFetch("/api/v1/tasks", { method: "POST", body: JSON.stringify(body) });
+    },
+    async patch(id, body) {
+      return apiFetch(`/api/v1/tasks/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+    },
+    async linkTicket(taskId, ticketId) {
+      return apiFetch(
+        `/api/v1/tasks/${encodeURIComponent(taskId)}/tickets`,
+        { method: "POST", body: JSON.stringify({ ticket_id: ticketId }) },
+      );
+    },
+    async unlinkTicket(taskId, ticketId) {
+      const resp = await fetch(`${API_BASE}/api/v1/tasks/${encodeURIComponent(taskId)}/tickets/${encodeURIComponent(ticketId)}`, {
+        method: "DELETE",
+        headers: { "X-API-Key": API_KEY },
+      });
+      if (!resp.ok && resp.status !== 204) throw new Error(`HTTP ${resp.status}`);
+      return null;
+    },
+    async bulk(body) {
+      return apiFetch("/api/v1/tasks/bulk", { method: "POST", body: JSON.stringify(body) });
+    },
+    async submitForReview(id, body) {
+      return apiFetch(`/api/v1/tasks/${encodeURIComponent(id)}/submit-for-review`, { method: "POST", body: JSON.stringify(body) });
+    },
+    async confirm(id, body) {
+      return apiFetch(`/api/v1/tasks/${encodeURIComponent(id)}/confirm`, { method: "POST", body: JSON.stringify(body) });
+    },
+    async reject(id, body) {
+      return apiFetch(`/api/v1/tasks/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify(body) });
+    },
+    async activity(id, params = {}) {
+      const res = await apiFetch(`/api/v1/tasks/${encodeURIComponent(id)}/activity${buildQS({ limit: 50, ...params })}`);
+      return { data: res.data || [], meta: res.meta || {} };
+    },
+    async comments(id) {
+      const res = await apiFetch(`/api/v1/tasks/${encodeURIComponent(id)}/comments`);
+      return res.data || [];
+    },
+    async postComment(id, body) {
+      return apiFetch(
+        `/api/v1/tasks/${encodeURIComponent(id)}/comments`,
+        { method: "POST", body: JSON.stringify(body) },
+      );
+    },
+  },
+
+  dashboard: {
+    async summary() {
+      const res = await apiFetch("/api/v1/dashboard/summary");
+      return res.data || {};
+    },
+    async heatmap() {
+      const res = await apiFetch("/api/v1/dashboard/problems-heatmap");
+      return res.data || {};
+    },
+    async teamLoad() {
+      const res = await apiFetch("/api/v1/dashboard/team-load");
+      return res.data || [];
+    },
+  },
+
+  analytics: {
+    async trends(params = {}) {
+      const res = await apiFetch(`/api/v1/analytics/trends${buildQS(params)}`);
+      return res.data || {};
+    },
+    async queueMetrics(params = {}) {
+      const res = await apiFetch(`/api/v1/analytics/queue-metrics${buildQS(params)}`);
+      return res.data || [];
+    },
+    async teamPerformance(params = {}) {
+      const res = await apiFetch(`/api/v1/analytics/team-performance${buildQS(params)}`);
+      return res.data || [];
+    },
+  },
+
+  search: {
+    async query(q, params = {}) {
+      const res = await apiFetch(`/api/v1/search${buildQS({ q, limit: 20, ...params })}`);
+      return res.data || {};
+    },
+  },
+
+  meta: {
+    async products() {
+      const res = await apiFetch("/api/v1/products");
+      return res.data || [];
+    },
+    async teams() {
+      const res = await apiFetch("/api/v1/teams");
+      return res.data || [];
+    },
+    async users() {
+      const res = await apiFetch("/api/v1/users");
+      return res.data || [];
     },
   },
 };

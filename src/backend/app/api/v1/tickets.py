@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+import os
+import uuid as _uuid
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,6 +9,8 @@ from app.api.deps import get_db, require_api_key
 from app.mapping import platform_db_to_ui, ticket_status_db_to_ui
 from app.schemas.tickets import TicketBulk, TicketCreate, TicketUpdate
 from app.services.resolve import resolve_problem_uuid, resolve_task_uuid, resolve_ticket_uuid
+
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/tmp/vector_uploads")
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -512,3 +517,70 @@ async def get_ticket(identifier: str, session: AsyncSession = Depends(get_db)):
     base["queue_item"] = dict(qrow) if qrow else None
     base["ai_suggestions"] = ai_suggestions
     return {"data": base}
+
+
+# ---------------------------------------------------------------------------
+# POST /{identifier}/attachments — upload file
+# ---------------------------------------------------------------------------
+
+@router.post("/{identifier}/attachments", status_code=201, dependencies=[Depends(require_api_key)])
+async def upload_attachment(
+    identifier: str,
+    session: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+    is_log: bool = Form(False),
+    is_screenshot: bool = Form(False),
+    uploaded_by: str | None = Form(None),
+):
+    tu = await resolve_ticket_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "NOT_FOUND")
+
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(413, "FILE_TOO_LARGE")
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    file_id = str(_uuid.uuid4())
+    ext = os.path.splitext(file.filename or "")[1]
+    s3_key = f"tickets/{str(tu)}/{file_id}{ext}"
+    local_path = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
+
+    contents = await file.read()
+    with open(local_path, "wb") as fh:
+        fh.write(contents)
+
+    r = await session.execute(
+        text(
+            "INSERT INTO attachments"
+            " (ticket_id, file_name, file_type, file_size, s3_key, is_log, is_screenshot, uploaded_by)"
+            " VALUES"
+            " (CAST(:tid AS uuid), :file_name, :file_type, :file_size, :s3_key,"
+            "  :is_log, :is_screenshot, CAST(:uploaded_by AS uuid))"
+            " RETURNING id::text, created_at"
+        ),
+        {
+            "tid": str(tu),
+            "file_name": file.filename,
+            "file_type": file.content_type,
+            "file_size": len(contents),
+            "s3_key": s3_key,
+            "is_log": is_log,
+            "is_screenshot": is_screenshot,
+            "uploaded_by": uploaded_by,
+        },
+    )
+    row = r.fetchone()
+    await session.commit()
+    return {
+        "data": {
+            "id": row[0],
+            "ticket_uuid": str(tu),
+            "file_name": file.filename,
+            "file_type": file.content_type,
+            "file_size": len(contents),
+            "is_log": is_log,
+            "is_screenshot": is_screenshot,
+            "url_stub": f"/attachments/{row[0]}",
+            "created_at": row[1].isoformat() if row[1] else None,
+        }
+    }

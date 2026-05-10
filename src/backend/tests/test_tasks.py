@@ -474,3 +474,201 @@ class TestTaskComments:
             json={"body": "comment", "author_id": "some-uuid"},
         )
         assert resp.status_code == 401
+
+
+_TICKET_UUID = "bbbbbbbb-0000-4000-8000-000000000001"
+_TASK_ID_STR = str(_TASK_UUID)
+
+
+# ---------------------------------------------------------------------------
+# POST /{identifier}/tickets — link ticket to task
+# ---------------------------------------------------------------------------
+
+class TestLinkTicket:
+    async def test_link_success(self, client, mock_session):
+        mock_session.execute.side_effect = [
+            FakeResult(scalar=_TASK_UUID),
+            FakeResult(scalar=_TICKET_UUID),
+            FakeResult(),
+        ]
+        resp = await client.post(
+            f"/api/v1/tasks/{_TASK_ID_STR}/tickets",
+            json={"ticket_id": _TICKET_UUID},
+        )
+        assert resp.status_code == 201
+        d = resp.json()["data"]
+        assert d["linked"] is True
+
+    async def test_link_task_not_found(self, client, mock_session):
+        mock_session.execute.return_value = FakeResult(scalar=None)
+        resp = await client.post(
+            "/api/v1/tasks/BUG-999/tickets",
+            json={"ticket_id": _TICKET_UUID},
+        )
+        assert resp.status_code == 404
+
+    async def test_link_ticket_not_found(self, client, mock_session):
+        mock_session.execute.side_effect = [
+            FakeResult(scalar=_TASK_UUID),
+            FakeResult(scalar=None),
+        ]
+        resp = await client.post(
+            f"/api/v1/tasks/{_TASK_ID_STR}/tickets",
+            json={"ticket_id": "nonexistent"},
+        )
+        assert resp.status_code == 404
+
+    async def test_link_requires_auth(self, client_no_auth, mock_session):
+        resp = await client_no_auth.post(
+            f"/api/v1/tasks/{_TASK_ID_STR}/tickets",
+            json={"ticket_id": _TICKET_UUID},
+        )
+        assert resp.status_code == 401
+
+    async def test_link_missing_ticket_id_422(self, client):
+        resp = await client.post(
+            f"/api/v1/tasks/{_TASK_ID_STR}/tickets",
+            json={},
+        )
+        assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# DELETE /{identifier}/tickets/{ticket_id} — unlink
+# ---------------------------------------------------------------------------
+
+class TestUnlinkTicket:
+    async def test_unlink_success(self, client, mock_session):
+        mock_session.execute.side_effect = [
+            FakeResult(scalar=_TASK_UUID),
+            FakeResult(scalar=_TICKET_UUID),
+            FakeResult(),
+        ]
+        resp = await client.delete(
+            f"/api/v1/tasks/{_TASK_ID_STR}/tickets/{_TICKET_UUID}",
+        )
+        assert resp.status_code == 204
+
+    async def test_unlink_task_not_found(self, client, mock_session):
+        mock_session.execute.return_value = FakeResult(scalar=None)
+        resp = await client.delete(
+            "/api/v1/tasks/BUG-999/tickets/some-ticket",
+        )
+        assert resp.status_code == 404
+
+    async def test_unlink_requires_auth(self, client_no_auth, mock_session):
+        resp = await client_no_auth.delete(
+            f"/api/v1/tasks/{_TASK_ID_STR}/tickets/{_TICKET_UUID}",
+        )
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# POST /bulk — bulk task operations
+# ---------------------------------------------------------------------------
+
+class TestTaskBulk:
+    async def test_bulk_assign(self, client, mock_session):
+        mock_session.execute.side_effect = [
+            FakeResult(scalar=_TASK_UUID),
+            FakeResult(),
+        ]
+        resp = await client.post(
+            "/api/v1/tasks/bulk",
+            json={"ids": [_TASK_ID_STR], "action": "assign", "assigned_to": "some-user-uuid"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["updated"] == 1
+
+    async def test_bulk_change_status(self, client, mock_session):
+        mock_session.execute.side_effect = [
+            FakeResult(scalar=_TASK_UUID),
+            FakeResult(),
+        ]
+        resp = await client.post(
+            "/api/v1/tasks/bulk",
+            json={"ids": [_TASK_ID_STR], "action": "change_status", "status": "in_progress"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["action"] == "change_status"
+
+    async def test_bulk_add_tag(self, client, mock_session):
+        mock_session.execute.side_effect = [
+            FakeResult(scalar=_TASK_UUID),
+            FakeResult(),
+        ]
+        resp = await client.post(
+            "/api/v1/tasks/bulk",
+            json={"ids": [_TASK_ID_STR], "action": "add_tag", "tag": "regression"},
+        )
+        assert resp.status_code == 200
+
+    async def test_bulk_link_to_jira(self, client, mock_session):
+        mock_session.execute.side_effect = [
+            FakeResult(scalar=_TASK_UUID),
+            FakeResult(),
+        ]
+        resp = await client.post(
+            "/api/v1/tasks/bulk",
+            json={"ids": [_TASK_ID_STR], "action": "link_to_jira", "jira_issue_key": "CORE-123"},
+        )
+        assert resp.status_code == 200
+
+    async def test_bulk_empty_ids_400(self, client):
+        resp = await client.post(
+            "/api/v1/tasks/bulk",
+            json={"ids": [], "action": "assign", "assigned_to": "uid"},
+        )
+        assert resp.status_code in (400, 422)
+
+    async def test_bulk_unknown_action_422(self, client, mock_session):
+        mock_session.execute.return_value = FakeResult(scalar=_TASK_UUID)
+        resp = await client.post(
+            "/api/v1/tasks/bulk",
+            json={"ids": [_TASK_ID_STR], "action": "delete_all"},
+        )
+        assert resp.status_code == 422
+
+    async def test_bulk_requires_auth(self, client_no_auth):
+        resp = await client_no_auth.post(
+            "/api/v1/tasks/bulk",
+            json={"ids": [_TASK_ID_STR], "action": "assign", "assigned_to": "uid"},
+        )
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# POST /tickets/{identifier}/attachments
+# ---------------------------------------------------------------------------
+
+class TestAttachments:
+    async def test_upload_success(self, client, mock_session):
+        import datetime as dt
+        mock_session.execute.side_effect = [
+            FakeResult(scalar=_TICKET_UUID),
+            FakeResult(fetchall_rows=[("att-uuid-1", dt.datetime.utcnow())]),
+        ]
+        resp = await client.post(
+            f"/api/v1/tickets/{_TICKET_UUID}/attachments",
+            files={"file": ("test.log", b"log content here", "text/plain")},
+            data={"is_log": "true"},
+        )
+        assert resp.status_code == 201
+        d = resp.json()["data"]
+        assert d["file_name"] == "test.log"
+        assert d["is_log"] is True
+
+    async def test_upload_ticket_not_found(self, client, mock_session):
+        mock_session.execute.return_value = FakeResult(scalar=None)
+        resp = await client.post(
+            "/api/v1/tickets/TKT-999/attachments",
+            files={"file": ("test.txt", b"data", "text/plain")},
+        )
+        assert resp.status_code == 404
+
+    async def test_upload_requires_auth(self, client_no_auth, mock_session):
+        resp = await client_no_auth.post(
+            f"/api/v1/tickets/{_TICKET_UUID}/attachments",
+            files={"file": ("test.txt", b"data", "text/plain")},
+        )
+        assert resp.status_code == 401

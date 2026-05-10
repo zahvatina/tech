@@ -62,3 +62,16 @@ class TaskConfirm(BaseModel):
 class TaskReject(BaseModel):
     reviewed_by: str
     review_comment: str = Field(..., min_length=1)
+
+
+class TaskLinkTicket(BaseModel):
+    ticket_id: str = Field(..., min_length=1)
+
+
+class TaskBulk(BaseModel):
+    ids: list[str] = Field(..., min_length=1)
+    action: Literal["assign", "change_status", "add_tag", "link_to_jira"]
+    assigned_to: str | None = None
+    status: str | None = None
+    tag: str | None = None
+    jira_issue_key: str | None = None

@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_api_key
 from app.mapping import priority_db_to_ui, task_status_db_to_ui
 from app.schemas.problems import CommentCreate
-from app.schemas.tasks import TaskConfirm, TaskCreate, TaskReject, TaskSubmitForReview, TaskUpdate
-from app.services.resolve import resolve_problem_uuid, resolve_task_uuid
+from app.schemas.tasks import TaskBulk, TaskConfirm, TaskCreate, TaskLinkTicket, TaskReject, TaskSubmitForReview, TaskUpdate
+from app.services.resolve import resolve_problem_uuid, resolve_task_uuid, resolve_ticket_uuid
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -563,3 +563,124 @@ async def add_task_comment(
             "created_at": row[1].isoformat() if row[1] else None,
         }
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /{identifier}/tickets — link ticket to task
+# ---------------------------------------------------------------------------
+
+@router.post("/{identifier}/tickets", status_code=201, dependencies=[Depends(require_api_key)])
+async def link_ticket_to_task(
+    identifier: str, body: TaskLinkTicket, session: AsyncSession = Depends(get_db)
+):
+    tu = await resolve_task_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "TASK_NOT_FOUND")
+    ticket_uuid = await resolve_ticket_uuid(session, body.ticket_id)
+    if not ticket_uuid:
+        raise HTTPException(404, "TICKET_NOT_FOUND")
+
+    await session.execute(
+        text(
+            "UPDATE support_tickets"
+            " SET task_id = CAST(:tid AS uuid), status = 'linked', updated_at = NOW()"
+            " WHERE id = CAST(:ticket_uuid AS uuid)"
+        ),
+        {"tid": str(tu), "ticket_uuid": str(ticket_uuid)},
+    )
+    await session.commit()
+    return {"data": {"task_uuid": str(tu), "ticket_uuid": str(ticket_uuid), "linked": True}}
+
+
+# ---------------------------------------------------------------------------
+# DELETE /{identifier}/tickets/{ticket_id} — unlink ticket from task
+# ---------------------------------------------------------------------------
+
+@router.delete("/{identifier}/tickets/{ticket_id}", status_code=204, dependencies=[Depends(require_api_key)])
+async def unlink_ticket_from_task(
+    identifier: str, ticket_id: str, session: AsyncSession = Depends(get_db)
+):
+    tu = await resolve_task_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "TASK_NOT_FOUND")
+    ticket_uuid = await resolve_ticket_uuid(session, ticket_id)
+    if not ticket_uuid:
+        raise HTTPException(404, "TICKET_NOT_FOUND")
+
+    await session.execute(
+        text(
+            "UPDATE support_tickets"
+            " SET task_id = NULL, updated_at = NOW()"
+            " WHERE id = CAST(:ticket_uuid AS uuid) AND task_id = CAST(:tid AS uuid)"
+        ),
+        {"tid": str(tu), "ticket_uuid": str(ticket_uuid)},
+    )
+    await session.commit()
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# POST /bulk — bulk operations on tasks
+# ---------------------------------------------------------------------------
+
+@router.post("/bulk", dependencies=[Depends(require_api_key)])
+async def bulk_tasks(body: TaskBulk, session: AsyncSession = Depends(get_db)):
+    if not body.ids:
+        raise HTTPException(400, "NO_IDS")
+
+    uuids: list[str] = []
+    for ident in body.ids:
+        u = await resolve_task_uuid(session, ident)
+        if u:
+            uuids.append(str(u))
+    if not uuids:
+        raise HTTPException(404, "TASKS_NOT_FOUND")
+
+    action = body.action
+    if action == "assign":
+        if not body.assigned_to:
+            raise HTTPException(422, "assigned_to required for assign")
+        await session.execute(
+            text(
+                "UPDATE tasks SET assignee_id = CAST(:uid AS uuid), updated_at = NOW()"
+                " WHERE id = ANY(CAST(:ids AS uuid[]))"
+            ),
+            {"uid": body.assigned_to, "ids": uuids},
+        )
+    elif action == "change_status":
+        if not body.status:
+            raise HTTPException(422, "status required for change_status")
+        if body.status not in ALLOW_TASK_STATUS:
+            raise HTTPException(422, f"Invalid status: {body.status}")
+        await session.execute(
+            text(
+                "UPDATE tasks SET status = :st, updated_at = NOW()"
+                " WHERE id = ANY(CAST(:ids AS uuid[]))"
+            ),
+            {"st": body.status, "ids": uuids},
+        )
+    elif action == "add_tag":
+        if not body.tag:
+            raise HTTPException(422, "tag required for add_tag")
+        await session.execute(
+            text(
+                "UPDATE tasks SET tags = array_append(COALESCE(tags, '{}'), :tag), updated_at = NOW()"
+                " WHERE id = ANY(CAST(:ids AS uuid[]))"
+            ),
+            {"tag": body.tag, "ids": uuids},
+        )
+    elif action == "link_to_jira":
+        if not body.jira_issue_key:
+            raise HTTPException(422, "jira_issue_key required for link_to_jira")
+        await session.execute(
+            text(
+                "UPDATE tasks SET jira_issue_key = :jira, updated_at = NOW()"
+                " WHERE id = ANY(CAST(:ids AS uuid[]))"
+            ),
+            {"jira": body.jira_issue_key, "ids": uuids},
+        )
+    else:
+        raise HTTPException(422, f"Unknown action: {action}")
+
+    await session.commit()
+    return {"data": {"updated": len(uuids), "action": action}}

@@ -3,6 +3,8 @@
 const ProblemDetail = ({ problemId, route, go }) => {
   const [p, setP] = React.useState(PROBLEMS.find(x => x.id === problemId) || null);
   const [bugs, setBugs] = React.useState(p ? BUGS.filter(b => b.problemId === problemId) : []);
+  const [tickets, setTickets] = React.useState([]);
+  const [activity, setActivity] = React.useState([]);
   const [tab, setTab] = React.useState(route.tab || "overview");
 
   React.useEffect(() => { if (route.tab) setTab(route.tab); }, [route.tab]);
@@ -20,19 +22,24 @@ const ProblemDetail = ({ problemId, route, go }) => {
       .catch(() => {
         if (!cancelled) setBugs(BUGS.filter(b => b.problemId === problemId));
       });
+    API.problems.tickets(problemId)
+      .then(res => { if (!cancelled) setTickets(res.data || []); })
+      .catch(() => { if (!cancelled) setTickets(TICKETS.filter(t => t.problemId === problemId)); });
+    API.problems.activity(problemId)
+      .then(res => { if (!cancelled) setActivity(res.data || []); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [problemId]);
 
   if (!p) return <div className="empty">Загрузка…</div>;
 
-  const tickets = TICKETS.filter(t => t.problemId === p.id);
-  const noBugTickets = tickets.filter(t => !t.bugId);
+  const noBugTickets = tickets.filter(t => !t.bugId && !t.task_id);
 
   const TABS = [
     { id: "overview", label: "Обзор", ct: null },
     { id: "bugs",     label: "Баги", ct: bugs.length },
     { id: "tickets",  label: "Обращения", ct: tickets.length },
-    { id: "activity", label: "Активность", ct: 28 },
+    { id: "activity", label: "Активность", ct: activity.length || null },
     { id: "linked",   label: "Связи", ct: bugs.length + 2 },
   ];
 
@@ -69,7 +76,7 @@ const ProblemDetail = ({ problemId, route, go }) => {
           {tab === "overview" && <ProblemOverview problem={p} bugs={bugs} tickets={tickets} go={go}/>}
           {tab === "bugs"     && <ProblemBugs problem={p} bugs={bugs} go={go} focus={route.focus}/>}
           {tab === "tickets"  && <ProblemTickets problem={p} tickets={tickets} bugs={bugs}/>}
-          {tab === "activity" && <ProblemActivity problem={p} bugs={bugs}/>}
+          {tab === "activity" && <ProblemActivity problem={p} bugs={bugs} activity={activity}/>}
           {tab === "linked"   && <ProblemLinked problem={p} bugs={bugs} tickets={tickets}/>}
         </div>
       </div>
@@ -381,30 +388,42 @@ const ProblemTickets = ({ problem: p, tickets, bugs }) => {
   );
 };
 
-const ACTIVITY = (p, bugs) => [
-  { t: "2 ч назад", who: "Илья Громов", kind: "evt-status", text: <>Статус изменён на <StatusBadge status={p.status}/></> },
-  { t: "3 ч назад", who: "Sentry · webhook", kind: "evt-bug", text: <>Найден spike обращений (+34% за 4ч)</> },
-  { t: "5 ч назад", who: "Анна Котова", kind: "evt-link", text: <>Привязано <strong>32</strong> обращения к багу <span className="chip">{bugs[0]?.id || "—"}</span></> },
-  { t: "вчера, 18:02", who: "Дмитрий Орлов", kind: "evt-comment", text: "Проверил логи, корреляция со временем релиза подтверждается. Эскалирую партнёру.", quote: "В 18:00 МСК пошёл рост 5xx на ACS-эндпоинте, что совпадает с релизом 5.18.4." },
-  { t: "вчера, 14:11", who: "AI · clustering", kind: "evt-bug", text: <>Кластеризовано <strong>86</strong> похожих обращений как новая подгруппа «3DS timeout»</> },
-  { t: "вчера, 09:32", who: "Анна Котова", kind: "evt-status", text: <>Приоритет повышен до <PriorityBadge p={p.priority}/></> },
-  { t: "2 дня назад", who: "Илья Громов", kind: "evt-link", text: <>Заведён баг <span className="chip">{bugs[0]?.id || "BUG-..."}</span> в Jira</> },
-  { t: "3 дня назад", who: "Анна Котова", kind: "evt-status", text: "Создана проблема", quote: p.desc },
-];
-const ProblemActivity = ({ problem: p, bugs }) => (
-  <div className="tl">
-    {ACTIVITY(p, bugs).map((e, i) => (
-      <div key={i} className={`tl-item ${e.kind}`}>
-        <div className="pin"><span className="dot"/></div>
-        <div className="body">
-          <div className="meta"><strong style={{ color: "var(--fg)" }}>{e.who}</strong> · {e.t}</div>
-          <div className="text">{e.text}</div>
-          {e.quote && <div className="quote">{e.quote}</div>}
-        </div>
-      </div>
-    ))}
-  </div>
-);
+const ACTIVITY_KIND = {
+  "status_change": "evt-status",
+  "comment":       "evt-comment",
+  "link":          "evt-link",
+  "create":        "evt-status",
+};
+
+const ProblemActivity = ({ problem: p, bugs, activity }) => {
+  const entries = activity && activity.length > 0 ? activity : null;
+
+  if (!entries) return (
+    <div className="empty muted">Нет данных активности</div>
+  );
+
+  return (
+    <div className="tl">
+      {entries.map((e, i) => {
+        const kind = ACTIVITY_KIND[e.action] || "evt-status";
+        const when = e.created_at
+          ? new Date(e.created_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+          : "";
+        return (
+          <div key={e.id || i} className={`tl-item ${kind}`}>
+            <div className="pin"><span className="dot"/></div>
+            <div className="body">
+              <div className="meta">
+                <strong style={{ color: "var(--fg)" }}>{e.actor_name || "Система"}</strong> · {when}
+              </div>
+              <div className="text">{e.action}: {typeof e.new_value === "string" ? e.new_value : JSON.stringify(e.new_value)}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 const ProblemLinked = ({ problem: p, bugs, tickets }) => (
   <>
