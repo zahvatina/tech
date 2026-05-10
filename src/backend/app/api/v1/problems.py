@@ -1,3 +1,23 @@
+"""
+Problems API — VECTOR support service.
+
+Проблема — агрегированный кластер однотипных обращений. Создаётся оператором
+(вручную из problem_determination-очереди) или AI-агентом (автоматически).
+
+Жизненный цикл:
+  new → in_progress → waiting_fix / monitoring → resolved → closed
+  (triage_sla_breached = TRUE если не перешла из new за 1 день)
+
+Связанные ресурсы:
+  /problems/:id/tickets  — все привязанные обращения
+  /problems/:id/tasks    — связанные баги/задачи
+  /problems/:id/activity — лог изменений и комментариев
+  /problems/:id/comments — комментарии (entity_type='problem' в таблице comments)
+  /problems/:id/sparkline — ряд тикетов за 28 дней для графика
+
+Сортировка по tickets_delta_pct требует материализованного view mv_problem_stats
+(пересчитывается через cron или триггер).
+"""
 from __future__ import annotations
 
 import uuid
@@ -166,6 +186,7 @@ async def list_problems(
     has_unresearched: bool | None = None,
     tickets_no_bug: bool | None = Query(None),
     sla_breached: bool | None = None,
+    triage_sla_breached: bool | None = None,
     view: Literal["all", "growing", "untriaged", "no-bug"] | None = Query(None),
 ):
     off = (page - 1) * limit
@@ -216,6 +237,8 @@ async def list_problems(
         clauses.append("p.tickets_no_task_count > 0")
     if sla_breached is True:
         clauses.append("p.sla_breached = TRUE")
+    if triage_sla_breached is True:
+        clauses.append("p.triage_sla_breached = TRUE")
     if view == "growing":
         clauses.append(
             "((p.tickets_count_prev_week > 0"

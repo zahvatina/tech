@@ -1,3 +1,19 @@
+"""
+Queues API — VECTOR support service.
+
+4 рабочих очереди, через которые проходят тикеты:
+  problem_determination   — оператор определяет проблему; если нужна новая — создаёт её
+  task_determination      — оператор привязывает задачу/баг или создаёт черновик (draft task)
+  recommendation_review   — оператор проверяет workaround перед отправкой клиенту
+  client_response         — оператор формирует ответ клиенту (workaround не найден)
+
+Позиция в очереди (queue_items):
+  POST /queues/:code/items/:id/take     — взять в работу (assigned_to = текущий оператор)
+  POST /queues/:code/items/:id/resolve  — завершить (тикет переходит в следующую очередь или resolved)
+  POST /queues/:code/items/:id/skip     — пропустить (вернуть в конец очереди)
+
+triage_sla_deadline вычисляется от created_at позиции; при нарушении sla_breached = TRUE.
+"""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

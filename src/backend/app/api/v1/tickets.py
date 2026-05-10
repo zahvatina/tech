@@ -1,3 +1,19 @@
+"""
+Tickets API — VECTOR support service.
+
+Тикет — входящее обращение клиента. Проходит несколько очередей:
+
+  new → in_queue (problem_determination / task_determination / recommendation_review / client_response)
+      → processing → linked → recommendation_sent → awaiting_response → resolved → closed
+
+  Ключевые поля:
+    problem_id / task_id — привязка к проблеме и задаче (заполняет AI или оператор)
+    requires_research    — флаг «нужно исследование» (нет подходящей задачи)
+    current_queue        — текущая очередь, если тикет стоит в ней
+    recommendation_text  — workaround из task.workaround для отправки клиенту
+
+  Attachments хранятся локально (UPLOAD_DIR) и в таблице attachments (s3_key — заглушка пути).
+"""
 import os
 import uuid as _uuid
 
@@ -7,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_api_key
 from app.mapping import platform_db_to_ui, ticket_status_db_to_ui
+from app.schemas.problems import CommentCreate
 from app.schemas.tickets import TicketBulk, TicketCreate, TicketUpdate
 from app.services.resolve import resolve_problem_uuid, resolve_task_uuid, resolve_ticket_uuid
 
@@ -522,6 +539,82 @@ async def get_ticket(identifier: str, session: AsyncSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # POST /{identifier}/attachments — upload file
 # ---------------------------------------------------------------------------
+
+@router.get("/{identifier}/comments")
+async def ticket_comments(
+    identifier: str,
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+):
+    tu = await resolve_ticket_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "NOT_FOUND")
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.id::text, c.body, c.is_internal,"
+                "       c.parent_id::text, c.created_at,"
+                "       COALESCE(NULLIF(trim(u.name), ''), split_part(u.email, '@', 1)) AS author_name,"
+                "       c.author_id::text"
+                " FROM comments c"
+                " LEFT JOIN users u ON u.id = c.author_id"
+                " WHERE c.entity_type = 'ticket' AND c.entity_id = CAST(:tid AS uuid)"
+                " ORDER BY c.created_at ASC LIMIT :lim"
+            ),
+            {"tid": str(tu), "lim": limit},
+        )
+    ).mappings().all()
+    items = [
+        {
+            "id": d["id"],
+            "body": d["body"],
+            "is_internal": d["is_internal"],
+            "parent_id": d.get("parent_id"),
+            "author_id": d["author_id"],
+            "author_name": d.get("author_name"),
+            "created_at": d["created_at"].isoformat() if d["created_at"] else None,
+        }
+        for d in (dict(r) for r in rows)
+    ]
+    return {"data": items, "meta": {"total": len(items)}}
+
+
+@router.post("/{identifier}/comments", status_code=201, dependencies=[Depends(require_api_key)])
+async def add_ticket_comment(
+    identifier: str, body: CommentCreate, session: AsyncSession = Depends(get_db)
+):
+    tu = await resolve_ticket_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "NOT_FOUND")
+    r = await session.execute(
+        text(
+            "INSERT INTO comments"
+            " (entity_type, entity_id, author_id, parent_id, body, is_internal)"
+            " VALUES"
+            " ('ticket', CAST(:entity_id AS uuid), CAST(:author_id AS uuid),"
+            "  CAST(:parent_id AS uuid), :body, :is_internal)"
+            " RETURNING id::text, created_at"
+        ),
+        {
+            "entity_id": str(tu),
+            "author_id": body.author_id,
+            "parent_id": body.parent_id,
+            "body": body.body,
+            "is_internal": body.is_internal,
+        },
+    )
+    row = r.fetchone()
+    await session.commit()
+    return {
+        "data": {
+            "id": row[0],
+            "entity_id": str(tu),
+            "body": body.body,
+            "is_internal": body.is_internal,
+            "created_at": row[1].isoformat() if row[1] else None,
+        }
+    }
+
 
 @router.post("/{identifier}/attachments", status_code=201, dependencies=[Depends(require_api_key)])
 async def upload_attachment(

@@ -1,3 +1,22 @@
+"""
+Tasks API — VECTOR support service.
+
+Task lifecycle (status machine):
+  draft  →  pending_confirmation  →  open  →  in_progress  →  waiting_fix  →  monitoring  →  fixed  →  closed
+              ↑ reject ↓                                          ↑ rejected_draft re-submit ↗
+
+  • draft            — оператор предложил новый баг/задачу (аналог draft_proposal из spec v2)
+  • pending_confirmation — команда должна подтвердить или отклонить
+  • rejected_draft   — команда отклонила; оператор может исправить и отправить повторно
+  • open             — подтверждена, ожидает взятия в работу
+  • in_progress      — разработчик взял в работу
+  • waiting_fix / monitoring / fixed / closed — финальные статусы после Jira-цикла
+
+Ключевые endpoints:
+  POST /tasks/:id/submit-for-review  draft|rejected_draft → pending_confirmation
+  POST /tasks/:id/confirm            pending_confirmation → open
+  POST /tasks/:id/reject             pending_confirmation → rejected_draft
+"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -16,12 +35,15 @@ from app.services.resolve import resolve_problem_uuid, resolve_task_uuid, resolv
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
+# Полный набор допустимых статусов для валидации входящих параметров и bulk-операций
 ALLOW_TASK_STATUS = {
     "draft", "pending_confirmation", "rejected_draft",
     "open", "in_progress", "in_review",
     "fixed", "wont_fix", "duplicate", "closed",
 }
 
+# Разрешённые переходы: используются в PATCH и в submit/confirm/reject для защиты от
+# невалидных статус-переходов через прямой PATCH (обход бизнес-логики)
 TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"pending_confirmation"},
     "pending_confirmation": {"open", "rejected_draft"},
@@ -82,6 +104,7 @@ async def list_tasks(
     problem_id: str | None = Query(None, description="UUID или short_id проблемы"),
     status: list[str] | None = Query(None),
     has_workaround: bool | None = None,
+    missing_notes: bool | None = Query(None, description="true = задачи без support_notes"),
     search: str | None = None,
 ):
     off = (page - 1) * limit
@@ -106,6 +129,8 @@ async def list_tasks(
         clauses.append("COALESCE(t.has_workaround, FALSE) = FALSE")
     elif has_workaround is True:
         clauses.append("t.has_workaround = TRUE")
+    if missing_notes is True:
+        clauses.append("(t.support_notes IS NULL OR t.support_notes = '')")
     if search:
         clauses.append(
             "(t.title ILIKE :sq OR t.short_id ILIKE :sq"

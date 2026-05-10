@@ -21,6 +21,9 @@ def problem_status_db_to_ui(s: str | None) -> str:
 
 
 def task_status_db_to_ui(s: str | None) -> str:
+    # Результат используется как task.status во фронтенде после normTask().
+    # "in-progress" (с дефисом) — намеренно: так работают фильтры BugsList.
+    # TASK_STATUS_TONE/LABEL в problem-detail.jsx содержит оба варианта ("in-progress" и "in_progress").
     s = (s or "draft").lower()
     return {
         "draft": "draft",

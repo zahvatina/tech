@@ -1,3 +1,14 @@
+"""
+Notifications API — VECTOR support service.
+
+Уведомления пишутся в таблицу notifications бэкграунд-процессами и вебхуками.
+Типы (type): draft_confirmed, draft_rejected, priority_changed, triage_sla_breach,
+             spike_alert, support_notes_missing, new_problem.
+
+Каждое уведомление адресовано либо конкретному user_id, либо всей team_id.
+Реал-тайм доставка — через WebSocket (не реализован в этом прототипе);
+здесь только REST-polling и PATCH /read-all.
+"""
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy import text

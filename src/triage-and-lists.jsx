@@ -1,4 +1,16 @@
-/* VECTOR — Triage queue, Bugs list, Tickets list, light routes */
+/* VECTOR — Triage queue, Bugs list, Tickets list, light routes
+
+   Компоненты:
+     Triage      — очередь problem_determination: карточка тикета + детализация справа.
+                   Кнопки: Взять в работу → Take; Пропустить → Skip; Решено → Resolve.
+                   После resolve тикет уходит из очереди и детализация закрывается.
+
+     BugsList    — таблица задач/багов со статусами. Фильтры отправляются на сервер (status[],
+                   has_workaround, missing_notes). Значок «blocked» = rejected_draft.
+
+     TicketsList — таблица тикетов. Сортировка и фильтры server-side через API.tickets.list().
+
+   Экспортируется через Object.assign(window, {...}) — компоненты доступны глобально. */
 
 /* ─── Triage Queue (list-detail split) ─── */
 

@@ -1,4 +1,10 @@
-/* VECTOR — Sidebar, Topbar, CmdPalette */
+/* VECTOR — Sidebar, Topbar, CmdPalette
+
+   Sidebar:
+     Operations — основная навигация (Dashboard, Problems, Triage, Bugs, Tickets)
+     Workspace  — командные разделы (РМО, Products, Teams, Insights)
+   Топбар отображает breadcrumb текущего маршрута и глобальную кнопку поиска.
+   CmdPalette — ⌘K универсальный поиск: переход к проблеме/багу/тикету по ID или тексту. */
 
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard" },

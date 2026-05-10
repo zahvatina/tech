@@ -1,3 +1,15 @@
+"""
+Pytest fixtures для всех тестов VECTOR backend.
+
+Стратегия тестирования: юнит-тесты с замоканной БД (без реального PostgreSQL).
+  mock_session — MagicMock с AsyncMock.execute; каждый тест задаёт return_value вручную
+                 через FakeResult(rows=[...]) или FakeResult(scalar=N).
+  client       — httpx AsyncClient c dependency-override для get_db и require_api_key.
+  client_no_auth — тот же клиент, но require_api_key НЕ переопределён (для тестов 401).
+
+FakeResult имитирует SQLAlchemy CursorResult: поддерживает .mappings().all(),
+.scalar_one(), .fetchone(), .fetchall() — достаточно для всех raw-SQL запросов.
+"""
 from __future__ import annotations
 
 import pytest

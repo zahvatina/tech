@@ -1,5 +1,22 @@
 /* VECTOR — API client for FastAPI backend.
-   Falls back to mock data gracefully when the backend is unreachable. */
+   Falls back to mock data gracefully when the backend is unreachable.
+
+   Структура:
+     API.queues.*      — очереди (list, take, resolve, skip)
+     API.tickets.*     — тикеты (list, get, create, patch, bulk, comments, uploadAttachment)
+     API.problems.*    — проблемы (list, get, create, patch, tickets, activity, comments, bulk)
+     API.tasks.*       — задачи/баги (list, get, create, patch, submitForReview, confirm, reject,
+                         linkTicket, unlinkTicket, bulk, comments, activity)
+     API.dashboard.*   — summary, heatmap, teamLoad
+     API.analytics.*   — trends, queueMetrics, teamPerformance
+     API.search.*      — полнотекстовый поиск
+     API.meta.*        — products, teams, users (справочники)
+     API.notifications.* — list, markAllRead
+
+   Конфигурация через глобальные переменные до загрузки скрипта:
+     window.VECTOR_API_BASE = "https://api.example.com"
+     window.VECTOR_API_KEY  = "prod-key"
+*/
 
 const API_BASE = window.VECTOR_API_BASE || "http://localhost:8000";
 const API_KEY  = window.VECTOR_API_KEY  || "dev-key";
@@ -125,6 +142,16 @@ const API = {
     },
     async bulk(body) {
       return apiFetch("/api/v1/tickets/bulk", { method: "POST", body: JSON.stringify(body) });
+    },
+    async comments(id) {
+      const res = await apiFetch(`/api/v1/tickets/${encodeURIComponent(id)}/comments`);
+      return res.data || [];
+    },
+    async postComment(id, body) {
+      return apiFetch(
+        `/api/v1/tickets/${encodeURIComponent(id)}/comments`,
+        { method: "POST", body: JSON.stringify(body) },
+      );
     },
     async uploadAttachment(id, file, opts = {}) {
       const fd = new FormData();

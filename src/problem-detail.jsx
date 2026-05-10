@@ -1,6 +1,26 @@
-/* VECTOR — Problem detail page */
+/* VECTOR — Problem detail page
+
+   Компоненты (дерево):
+     ProblemDetail          — главный компонент, загружает проблему + задачи + тикеты + активность
+       ProblemOverview      — таб «Обзор»: KPI, workaround, graphy связей
+       ProblemBugs          — таб «Баги»: список BugCard + форма создания черновика
+         BugCard            — статус-зависимые действия: submit-for-review / confirm / reject
+         BugRow             — compact read-only вариант для обзора и связей
+       ProblemTickets       — таб «Обращения»: таблица тикетов с фильтрами
+       ProblemActivity      — таб «Активность»: таймлайн событий из API
+       ProblemTeam          — таб «Команда»: triage SLA, pending confirmation, missing notes
+       ProblemLinked        — таб «Связи»: граф + похожие проблемы
+     RmoSpace               — отдельный экран (route=rmo): все pending_confirmation задачи
+
+   Данные задач:
+     Задачи хранятся в `bugs` state — это реальные tasks из /api/v1/tasks?problem_id=...
+     После normTask() поле status = ui_status: "draft" | "review" | "blocked" | "open" | ...
+     TASK_STATUS_TONE/LABEL — карта всех 9 UI-статусов на цвет и человеческий текст.
+*/
 
 /* ─── Task status maps ─── */
+// Тон и метка для каждого ui_status (после normTask status = task_status_db_to_ui(db_status))
+// "in-progress" с дефисом = маппинг из open/in_progress через task_status_db_to_ui в mapping.py
 const TASK_STATUS_TONE = {
   draft:                "mute",
   review:               "warning",
@@ -8,6 +28,7 @@ const TASK_STATUS_TONE = {
   blocked:              "critical",
   rejected_draft:       "critical",
   open:                 "high",
+  "in-progress":        "info",
   in_progress:          "info",
   waiting_fix:          "warning",
   monitoring:           "ok",
@@ -21,6 +42,7 @@ const TASK_STATUS_LABEL = {
   blocked:              "Отклонён",
   rejected_draft:       "Отклонён",
   open:                 "Открыт",
+  "in-progress":        "В работе",
   in_progress:          "В работе",
   waiting_fix:          "Ожидает фикса",
   monitoring:           "Мониторинг",
