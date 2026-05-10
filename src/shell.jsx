@@ -1,4 +1,10 @@
-/* VECTOR — Sidebar, Topbar, CmdPalette */
+/* VECTOR — Sidebar, Topbar, CmdPalette
+
+   Sidebar:
+     Operations — основная навигация (Dashboard, Problems, Triage, Bugs, Tickets)
+     Workspace  — командные разделы (РМО, Products, Teams, Insights)
+   Топбар отображает breadcrumb текущего маршрута и глобальную кнопку поиска.
+   CmdPalette — ⌘K универсальный поиск: переход к проблеме/багу/тикету по ID или тексту. */
 
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard" },
@@ -8,6 +14,7 @@ const NAV = [
   { id: "tickets",   label: "Tickets",   icon: "ticket",    count: 4218 },
 ];
 const NAV2 = [
+  { id: "rmo",       label: "РМО",       icon: "team" },
   { id: "products",  label: "Products",  icon: "product" },
   { id: "teams",     label: "Teams",     icon: "team" },
   { id: "insights",  label: "Insights",  icon: "insight" },
@@ -45,7 +52,7 @@ const Sidebar = ({ route, go, openCmd }) => (
       {NAV2.map(n => {
         const I = Icons[n.icon];
         return (
-          <button key={n.id} className="sb-link" onClick={() => go({ view: n.id })}>
+          <button key={n.id} className={`sb-link ${route.view===n.id?"active":""}`} onClick={() => go({ view: n.id })}>
             <I/><span>{n.label}</span>
           </button>
         );

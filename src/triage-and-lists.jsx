@@ -1,18 +1,62 @@
-/* VECTOR — Triage queue, Bugs list, Tickets list, light routes */
+/* VECTOR — Triage queue, Bugs list, Tickets list, light routes
+
+   Компоненты:
+     Triage      — очередь problem_determination: карточка тикета + детализация справа.
+                   Кнопки: Взять в работу → Take; Пропустить → Skip; Решено → Resolve.
+                   После resolve тикет уходит из очереди и детализация закрывается.
+
+     BugsList    — таблица задач/багов со статусами. Фильтры отправляются на сервер (status[],
+                   has_workaround, missing_notes). Значок «blocked» = rejected_draft.
+
+     TicketsList — таблица тикетов. Сортировка и фильтры server-side через API.tickets.list().
+
+   Экспортируется через Object.assign(window, {...}) — компоненты доступны глобально. */
 
 /* ─── Triage Queue (list-detail split) ─── */
-const Triage = ({ go }) => {
-  const queue = TICKETS.filter(t => t.flags.isNew || t.flags.needsResearch || (!t.bugId && t.status !== "duplicate"));
-  const [sel, setSel] = React.useState(queue[0]?.id);
-  const cur = queue.find(t => t.id === sel) || queue[0];
 
-  // AI clusters
-  const clusters = [
-    { id: "C-001", title: "Invalid VIN при оформлении ОСАГО", count: 198, growth: 0.74, products: ["ОСАГО"], suggestedBug: false, severity: "high" },
-    { id: "C-002", title: "Платёж зависает после ввода 3DS", count: 86, growth: 0.34, products: ["ОСАГО"], suggestedBug: "BUG-9170", severity: "critical" },
-    { id: "C-003", title: "Нет клиник в малых городах ДМС", count: 24, growth: 0.18, products: ["ДМС"], suggestedBug: false, severity: "medium" },
-    { id: "C-004", title: "Не открывается PDF полиса", count: 41, growth: 0.28, products: ["КАСКО"], suggestedBug: "BUG-8990", severity: "high" },
-  ];
+// Fallback mock clusters shown when API clusters unavailable
+const MOCK_CLUSTERS = [
+  { id: "C-001", title: "Invalid VIN при оформлении ОСАГО", count: 198, growth: 0.74, severity: "high", suggestedBug: false },
+  { id: "C-002", title: "Платёж зависает после ввода 3DS",  count: 86,  growth: 0.34, severity: "critical", suggestedBug: "BUG-9170" },
+  { id: "C-003", title: "Нет клиник в малых городах ДМС",   count: 24,  growth: 0.18, severity: "medium", suggestedBug: false },
+  { id: "C-004", title: "Не открывается PDF полиса",         count: 41,  growth: 0.28, severity: "high",   suggestedBug: "BUG-8990" },
+];
+
+const TRIAGE_QUEUE_CODE = "problem_determination";
+
+const Triage = ({ go }) => {
+  const [queueItems, setQueueItems] = React.useState([]);
+  const [clusters, setClusters]     = React.useState(MOCK_CLUSTERS);
+  const [sel, setSel]               = React.useState(null);
+  const [loading, setLoading]       = React.useState(false);
+  const [actionPending, setActionPending] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    API.queues.items(TRIAGE_QUEUE_CODE, { status: "pending", limit: 50 })
+      .then(items => { if (!cancelled) { setQueueItems(items); if (items[0]) setSel(items[0].id); } })
+      .catch(() => {
+        if (!cancelled) {
+          // Fallback: use mock tickets that need research
+          const fallback = TICKETS.filter(t => t.flags.isNew || t.flags.needsResearch || (!t.bugId && t.status !== "duplicate")).slice(0, 30);
+          setQueueItems(fallback.map(t => ({ id: t.id, _mockTicket: t, ticket: { id: t.id, summary: t.summary, product: t.product, platform: t.platform, status_ui: t.status } })));
+          if (fallback[0]) setSel(fallback[0].id);
+        }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    // Fetch clusters from triage-queue endpoint
+    fetch(`${window.VECTOR_API_BASE || "http://localhost:8000"}/api/v1/tickets/triage-queue`)
+      .then(r => r.ok ? r.json() : null)
+      .then(res => { if (!cancelled && res?.data?.clusters?.length) setClusters(res.data.clusters); })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const queue = queueItems;
+  const cur = queue.find(item => item.id === sel) || queue[0];
 
   return (
     <div className="page" style={{ display: "grid", gridTemplateRows: "auto 1fr", overflow: "hidden" }}>
@@ -20,7 +64,7 @@ const Triage = ({ go }) => {
         <div className="row">
           <div className="grow">
             <h1>Triage queue</h1>
-            <div className="desc">{queue.length} обращений требуют разбора · AI обнаружил {clusters.length} кластера</div>
+            <div className="desc">{loading ? "загрузка…" : `${queue.length} обращений требуют разбора`} · AI обнаружил {clusters.length} кластера</div>
           </div>
           <div className="row">
             <Btn ghost icon={<Icons.ai/>}>Авто-кластеризация</Btn>
@@ -67,39 +111,74 @@ const Triage = ({ go }) => {
           <div className="lbl" style={{ font: "500 10px var(--mono)", color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: ".08em", padding: "12px 14px 4px" }}>
             Очередь · {queue.length}
           </div>
-          {queue.slice(0, 30).map(t => (
-            <div key={t.id} className={`split-item ${cur?.id===t.id?"sel":""}`} onClick={() => setSel(t.id)}>
-              <div className="top">
-                <span className="id">{t.id}</span>
-                <Badge tone={t.flags.isNew?"info":"high"} dot>{t.flags.isNew?"новый":"ресерч"}</Badge>
-                <span className="grow"/>
-                <span className="faint" style={{ fontSize: 11 }}>{t.created.slice(5,10)}</span>
+          {queue.slice(0, 30).map(item => {
+            const t = item.ticket || item._mockTicket || item;
+            const created = item.created || (t.created || "");
+            return (
+              <div key={item.id} className={`split-item ${cur?.id===item.id?"sel":""}`} onClick={() => setSel(item.id)}>
+                <div className="top">
+                  <span className="id">{t.id || item.id}</span>
+                  <Badge tone="info" dot>triage</Badge>
+                  <span className="grow"/>
+                  <span className="faint" style={{ fontSize: 11 }}>{(created||"").slice(5,10)}</span>
+                </div>
+                <div className="ttl">{(t.summary||"").slice(0, 70)}</div>
+                <div className="meta">
+                  <span>{t.product}</span>
+                  <span><PlatformIcon p={t.platform}/> {t.platform}</span>
+                  <span>{t.region}</span>
+                </div>
               </div>
-              <div className="ttl">{t.summary.slice(0, 70)}</div>
-              <div className="meta">
-                <span>{t.product}</span>
-                <span><PlatformIcon p={t.platform}/> {t.platform}</span>
-                <span>{t.region}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="det-main" style={{ borderRight: "1px solid var(--line)" }}>
-          {cur && <TicketDetail ticket={cur} go={go}/>}
+          {cur && <TicketDetail queueItem={cur} queueCode={TRIAGE_QUEUE_CODE} go={go}/>}
         </div>
       </div>
     </div>
   );
 };
 
-const TicketDetail = ({ ticket: t, go }) => {
+const TicketDetail = ({ queueItem, queueCode, go }) => {
+  const [ticket, setTicket] = React.useState(queueItem._mockTicket || queueItem.ticket || queueItem);
+  const [aiSuggestions, setAiSuggestions] = React.useState([]);
+  const [acting, setActing] = React.useState(false);
+
+  React.useEffect(() => {
+    const ticketId = (queueItem.ticket?.id) || (queueItem._mockTicket?.id) || queueItem.id;
+    if (!ticketId) return;
+    let cancelled = false;
+    API.tickets.get(ticketId)
+      .then(data => { if (!cancelled) { setTicket(data); setAiSuggestions(data.ai_suggestions || []); } })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [queueItem.id]);
+
+  const t = ticket;
   const problem = PROBLEMS.find(p => p.id === t.problemId);
   const bug = t.bugId ? BUGS.find(b => b.id === t.bugId) : null;
-  // AI suggestions for matching problems
-  const suggestions = PROBLEMS.filter(p => p.products.includes(t.product) && p.platforms.includes(t.platform))
-    .slice(0, 3)
-    .map(p => ({ p, score: 0.6 + Math.random() * 0.35 }));
+  // Merge API ai_suggestions with fallback mock suggestions from PROBLEMS
+  const suggestions = aiSuggestions.length > 0
+    ? aiSuggestions.map(s => ({ p: PROBLEMS.find(p => p.id === s.suggested_entity_id) || { id: s.suggested_entity_id, title: "Проблема", tickets: 0, severity: "medium" }, score: s.confidence }))
+    : PROBLEMS.filter(p => p.products?.includes(t.product) && p.platforms?.includes(t.platform)).slice(0, 3).map(p => ({ p, score: 0.6 + Math.random() * 0.35 }));
+
+  const handleTake = async () => {
+    setActing(true);
+    try { await API.queues.take(queueCode, queueItem.id, "me"); } catch(e) {} finally { setActing(false); }
+  };
+  const handleSkip = async () => {
+    setActing(true);
+    try { await API.queues.skip(queueCode, queueItem.id); } catch(e) {} finally { setActing(false); }
+  };
+  const handleResolve = async () => {
+    setActing(true);
+    try {
+      await API.queues.resolve(queueCode, queueItem.id, "Resolved via triage");
+      go({ view: "triage" });
+    } catch(e) {} finally { setActing(false); }
+  };
 
   return (
     <div>
@@ -113,8 +192,9 @@ const TicketDetail = ({ ticket: t, go }) => {
           <span className="chip">{t.region}</span>
           <span className="chip">{t.channel}</span>
           <div style={{ flex: 1 }}/>
-          <Btn ghost icon={<Icons.user/>}>На себя</Btn>
-          <Btn ghost icon={<Icons.close/>}>Закрыть как дубль</Btn>
+          <Btn ghost icon={<Icons.user/>} onClick={handleTake} disabled={acting}>На себя</Btn>
+          <Btn ghost icon={<Icons.close/>} onClick={handleSkip} disabled={acting}>Вернуть в очередь</Btn>
+          <Btn tone="ok" icon={<Icons.check/>} onClick={handleResolve} disabled={acting}>Решено</Btn>
           <Btn primary icon={<Icons.link/>}>Привязать</Btn>
         </div>
       </div>
@@ -204,10 +284,27 @@ const TicketDetail = ({ ticket: t, go }) => {
 /* ─── Bugs list (cross-problem) ─── */
 const BugsList = ({ go }) => {
   const [filter, setFilter] = React.useState("all");
-  const filtered = BUGS.filter(b => {
+  const [bugs, setBugs] = React.useState(BUGS);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const params = filter === "no-workaround" ? { has_workaround: false, limit: 100 }
+                 : filter === "blocked"       ? { status: ["blocked", "rejected_draft"], limit: 100 }
+                 : filter === "fixed"         ? { status: ["fixed", "closed"], limit: 100 }
+                 : { limit: 100 };
+    API.tasks.listAll(params)
+      .then(data => { if (!cancelled && data.length) setBugs(data); })
+      .catch(() => { if (!cancelled) setBugs(BUGS); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [filter]);
+
+  const filtered = bugs.filter(b => {
     if (filter === "no-workaround") return !b.workaround;
-    if (filter === "blocked") return b.status === "blocked";
-    if (filter === "fixed") return b.status === "fixed";
+    if (filter === "blocked") return b.status === "blocked" || b.status === "rejected_draft";
+    if (filter === "fixed") return b.status === "fixed" || b.status === "closed";
     return true;
   });
   return (
@@ -216,7 +313,7 @@ const BugsList = ({ go }) => {
         <div className="row">
           <div className="grow">
             <h1>Баги</h1>
-            <div className="desc">{BUGS.length} всего · {BUGS.filter(b => !b.workaround).length} без workaround · {BUGS.filter(b => b.status === "fixed").length} исправлено</div>
+            <div className="desc">{loading ? "загрузка…" : `${bugs.length} всего · ${bugs.filter(b => !b.workaround).length} без workaround · ${bugs.filter(b => b.status === "fixed" || b.status === "closed").length} исправлено`}</div>
           </div>
           <Btn primary icon={<Icons.plus/>}>Новый баг</Btn>
         </div>
@@ -266,10 +363,28 @@ const BugsList = ({ go }) => {
 /* ─── Tickets list (cross-problem) ─── */
 const TicketsList = ({ go }) => {
   const [filter, setFilter] = React.useState("all");
-  const filtered = TICKETS.filter(t => {
+  const [tickets, setTickets] = React.useState(TICKETS);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const params = filter === "no-bug" ? { no_task: true }
+                 : filter === "research" ? { requires_research: true }
+                 : filter === "new" ? { status: "new" }
+                 : {};
+    setLoading(true);
+    API.tickets.list({ ...params, limit: 100 })
+      .then(res => { if (!cancelled) setTickets(res.data); })
+      .catch(() => { if (!cancelled) setTickets(TICKETS); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [filter]);
+
+  const filtered = tickets.filter(t => {
+    // local fallback filtering when using mock data
     if (filter === "no-bug") return !t.bugId;
-    if (filter === "new") return t.flags.isNew;
-    if (filter === "research") return t.flags.needsResearch;
+    if (filter === "new") return t.flags?.isNew || t.status === "new";
+    if (filter === "research") return t.flags?.needsResearch || t.requires_research;
     return true;
   }).slice(0, 80);
   return (
@@ -278,7 +393,7 @@ const TicketsList = ({ go }) => {
         <div className="row">
           <div className="grow">
             <h1>Обращения</h1>
-            <div className="desc">{TICKETS.length} всего · {TICKETS.filter(t => !t.bugId).length} без бага</div>
+            <div className="desc">{loading ? "загрузка…" : `${tickets.length} всего · ${tickets.filter(t => !t.bugId).length} без бага`}</div>
           </div>
           <Btn ghost icon={<Icons.filter/>}>Сохранить вид</Btn>
           <Btn primary icon={<Icons.plus/>}>Новое обращение</Btn>
@@ -296,19 +411,23 @@ const TicketsList = ({ go }) => {
           </thead>
           <tbody>
             {filtered.map(t => {
-              const p = PROBLEMS.find(x => x.id === t.problemId);
+              const problemId = t.problemId || t.problem_uuid;
+              const p = PROBLEMS.find(x => x.id === problemId);
+              const status = t.ui_status || t.status || "new";
+              const statusInfo = TICKET_STATUS?.[status] || { tone: "mute", label: status };
+              const created = t.created || t.created_at || "";
               return (
-                <tr key={t.id} className="row-link" onClick={() => go({ view: "problems", detailId: t.problemId, tab: "tickets" })}>
+                <tr key={t.id} className="row-link" onClick={() => go({ view: "problems", detailId: problemId, tab: "tickets" })}>
                   <td className="id">{t.id}</td>
                   <td className="ttl"><span style={{display:"inline-block", maxWidth: 360, overflow:"hidden", textOverflow:"ellipsis"}}>{t.summary}</span></td>
-                  <td className="muted" style={{ font: "500 11.5px var(--mono)" }}>{t.userId}</td>
+                  <td className="muted" style={{ font: "500 11.5px var(--mono)" }}>{t.userId || t.user_id}</td>
                   <td>{t.product}</td>
                   <td><PlatformIcon p={t.platform}/> <span style={{font:"500 11px var(--mono)"}}>{t.platform}</span></td>
                   <td className="muted">{t.region}</td>
-                  <td><Badge tone={TICKET_STATUS[t.status].tone} dot>{TICKET_STATUS[t.status].label}</Badge></td>
-                  <td className="muted"><span style={{ font: "500 11px var(--mono)", marginRight: 6 }}>{p?.id}</span></td>
-                  <td>{t.bugId ? <span className="chip">{t.bugId}</span> : <span className="bdg bdg-mute">—</span>}</td>
-                  <td className="muted" style={{ fontSize: 11.5 }}>{t.created.slice(5,10)} {t.created.slice(11,16)}</td>
+                  <td><Badge tone={statusInfo.tone} dot>{statusInfo.label}</Badge></td>
+                  <td className="muted"><span style={{ font: "500 11px var(--mono)", marginRight: 6 }}>{p?.id || t.problemId}</span></td>
+                  <td>{(t.bugId || t.task_short_id) ? <span className="chip">{t.bugId || t.task_short_id}</span> : <span className="bdg bdg-mute">—</span>}</td>
+                  <td className="muted" style={{ fontSize: 11.5 }}>{created.slice(5,10)} {created.slice(11,16)}</td>
                 </tr>
               );
             })}

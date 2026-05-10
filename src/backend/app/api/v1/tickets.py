@@ -1,12 +1,48 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+"""
+Tickets API — VECTOR support service.
+
+Тикет — входящее обращение клиента. Проходит несколько очередей:
+
+  new → in_queue (problem_determination / task_determination / recommendation_review / client_response)
+      → processing → linked → recommendation_sent → awaiting_response → resolved → closed
+
+  Ключевые поля:
+    problem_id / task_id — привязка к проблеме и задаче (заполняет AI или оператор)
+    requires_research    — флаг «нужно исследование» (нет подходящей задачи)
+    current_queue        — текущая очередь, если тикет стоит в ней
+    recommendation_text  — workaround из task.workaround для отправки клиенту
+
+  Attachments хранятся локально (UPLOAD_DIR) и в таблице attachments (s3_key — заглушка пути).
+"""
+import os
+import uuid as _uuid
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
+from app.api.deps import get_db, require_api_key
 from app.mapping import platform_db_to_ui, ticket_status_db_to_ui
+from app.schemas.problems import CommentCreate
+from app.schemas.tickets import TicketBulk, TicketCreate, TicketUpdate
 from app.services.resolve import resolve_problem_uuid, resolve_task_uuid, resolve_ticket_uuid
 
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/tmp/vector_uploads")
+
 router = APIRouter(prefix="/tickets", tags=["tickets"])
+
+TICKET_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "new":                 {"in_queue", "processing", "researching", "duplicate"},
+    "in_queue":            {"processing", "researching", "duplicate", "new"},
+    "processing":          {"linked", "researching", "recommendation_sent", "duplicate", "in_queue"},
+    "linked":              {"recommendation_sent", "awaiting_response", "resolved", "processing"},
+    "researching":         {"linked", "duplicate", "processing", "in_queue"},
+    "recommendation_sent": {"awaiting_response", "resolved"},
+    "awaiting_response":   {"resolved", "recommendation_sent"},
+    "resolved":            {"closed"},
+    "duplicate":           {"researching", "processing"},
+    "closed":              set(),
+}
 
 
 def _ticket_item(d: dict) -> dict:
@@ -40,6 +76,160 @@ def _ticket_item(d: dict) -> dict:
         },
         "attachments": [],
     }
+
+
+# ---------------------------------------------------------------------------
+# POST / — create ticket
+# ---------------------------------------------------------------------------
+
+@router.post("", status_code=201, dependencies=[Depends(require_api_key)])
+async def create_ticket(body: TicketCreate, session: AsyncSession = Depends(get_db)):
+    product_uuid = None
+    if body.product_id:
+        res = await session.execute(
+            text("SELECT id FROM products WHERE id::text = :id OR lower(code) = lower(:id) LIMIT 1"),
+            {"id": body.product_id},
+        )
+        row = res.fetchone()
+        if not row:
+            raise HTTPException(404, "PRODUCT_NOT_FOUND")
+        product_uuid = row[0]
+
+    problem_uuid = None
+    if body.problem_id:
+        problem_uuid = await resolve_problem_uuid(session, body.problem_id)
+        if not problem_uuid:
+            raise HTTPException(404, "PROBLEM_NOT_FOUND")
+
+    task_uuid = None
+    if body.task_id:
+        task_uuid = await resolve_task_uuid(session, body.task_id)
+        if not task_uuid:
+            raise HTTPException(404, "TASK_NOT_FOUND")
+
+    r = await session.execute(
+        text(
+            """INSERT INTO support_tickets
+                 (user_id, product_id, platform, raw_text, summary, ticket_date,
+                  channel, region, problem_id, task_id, tags,
+                  customer_name, customer_email, status)
+               VALUES
+                 (:user_id, :product_id, :platform, :raw_text, :summary,
+                  COALESCE(CAST(:ticket_date AS timestamptz), NOW()),
+                  :channel, :region, :problem_id, :task_id, CAST(:tags AS text[]),
+                  :customer_name, :customer_email, 'new')
+               RETURNING id::text, short_id"""
+        ),
+        {
+            "user_id": body.user_id,
+            "product_id": str(product_uuid) if product_uuid else None,
+            "platform": body.platform,
+            "raw_text": body.raw_text,
+            "summary": body.summary,
+            "ticket_date": body.ticket_date,
+            "channel": body.channel,
+            "region": body.region,
+            "problem_id": str(problem_uuid) if problem_uuid else None,
+            "task_id": str(task_uuid) if task_uuid else None,
+            "tags": body.tags,
+            "customer_name": body.customer_name,
+            "customer_email": body.customer_email,
+        },
+    )
+    await session.commit()
+    tid_str, short_id = r.fetchone()
+    return {"data": {"uuid": tid_str, "short_id": short_id, "status": "new"}}
+
+
+# ---------------------------------------------------------------------------
+# POST /bulk — bulk operations
+# ---------------------------------------------------------------------------
+
+@router.post("/bulk", dependencies=[Depends(require_api_key)])
+async def bulk_tickets(body: TicketBulk, session: AsyncSession = Depends(get_db)):
+    if not body.ids:
+        raise HTTPException(400, "NO_IDS")
+
+    # Validate action prerequisites before any DB resolution
+    if body.action == "link_to_problem" and not body.problem_id:
+        raise HTTPException(422, "problem_id required for link_to_problem")
+    if body.action == "link_to_task" and not body.task_id:
+        raise HTTPException(422, "task_id required for link_to_task")
+    if body.action == "change_status" and not body.status:
+        raise HTTPException(422, "status required for change_status")
+    if body.action == "assign" and not body.assigned_to:
+        raise HTTPException(422, "assigned_to required for assign")
+    if body.action == "mark_duplicate" and not body.duplicate_of:
+        raise HTTPException(422, "duplicate_of required for mark_duplicate")
+
+    problem_uuid = None
+    if body.problem_id:
+        problem_uuid = await resolve_problem_uuid(session, body.problem_id)
+        if not problem_uuid:
+            raise HTTPException(404, "PROBLEM_NOT_FOUND")
+
+    task_uuid = None
+    if body.task_id:
+        task_uuid = await resolve_task_uuid(session, body.task_id)
+        if not task_uuid:
+            raise HTTPException(404, "TASK_NOT_FOUND")
+
+    dup_uuid = None
+    if body.duplicate_of:
+        dup_uuid = await resolve_ticket_uuid(session, body.duplicate_of)
+        if not dup_uuid:
+            raise HTTPException(404, "DUPLICATE_OF_NOT_FOUND")
+
+    uuids: list[str] = []
+    for ident in body.ids:
+        u = await resolve_ticket_uuid(session, ident)
+        if u:
+            uuids.append(str(u))
+
+    if not uuids:
+        raise HTTPException(404, "TICKETS_NOT_FOUND")
+
+    action = body.action
+    if action == "link_to_problem":
+        await session.execute(
+            text("UPDATE support_tickets SET problem_id = CAST(:pid AS uuid), updated_at = NOW()"
+                 " WHERE id = ANY(CAST(:ids AS uuid[]))"),
+            {"pid": str(problem_uuid), "ids": uuids},
+        )
+    elif action == "link_to_task":
+        await session.execute(
+            text("UPDATE support_tickets SET task_id = CAST(:tid AS uuid), status = 'linked', updated_at = NOW()"
+                 " WHERE id = ANY(CAST(:ids AS uuid[]))"),
+            {"tid": str(task_uuid), "ids": uuids},
+        )
+    elif action == "change_status":
+        await session.execute(
+            text("UPDATE support_tickets SET status = :st, updated_at = NOW()"
+                 " WHERE id = ANY(CAST(:ids AS uuid[]))"),
+            {"st": body.status, "ids": uuids},
+        )
+    elif action == "assign":
+        await session.execute(
+            text("UPDATE support_tickets SET assigned_to = CAST(:uid AS uuid), updated_at = NOW()"
+                 " WHERE id = ANY(CAST(:ids AS uuid[]))"),
+            {"uid": body.assigned_to, "ids": uuids},
+        )
+    elif action == "mark_research":
+        await session.execute(
+            text("UPDATE support_tickets SET requires_research = TRUE, status = 'researching', updated_at = NOW()"
+                 " WHERE id = ANY(CAST(:ids AS uuid[]))"),
+            {"ids": uuids},
+        )
+    elif action == "mark_duplicate":
+        await session.execute(
+            text("UPDATE support_tickets SET is_duplicate = TRUE,"
+                 " duplicate_of = CAST(:dup AS uuid), status = 'duplicate', updated_at = NOW()"
+                 " WHERE id = ANY(CAST(:ids AS uuid[]))"),
+            {"dup": str(dup_uuid), "ids": uuids},
+        )
+
+    await session.commit()
+    return {"data": {"updated": len(uuids), "action": action}}
 
 
 @router.get("")
@@ -212,6 +402,83 @@ async def triage_queue(session: AsyncSession = Depends(get_db)):
     }
 
 
+# ---------------------------------------------------------------------------
+# PATCH /{identifier} — update ticket
+# ---------------------------------------------------------------------------
+
+@router.patch("/{identifier}", dependencies=[Depends(require_api_key)])
+async def update_ticket(
+    identifier: str,
+    body: TicketUpdate,
+    session: AsyncSession = Depends(get_db),
+):
+    tu = await resolve_ticket_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "NOT_FOUND")
+
+    fields = body.model_dump(exclude_none=True)
+    if not fields:
+        raise HTTPException(400, "NO_FIELDS")
+
+    # Status transition validation
+    if "status" in fields:
+        cur_status = (
+            await session.execute(
+                text("SELECT status FROM support_tickets WHERE id = CAST(:id AS uuid)"),
+                {"id": str(tu)},
+            )
+        ).scalar_one()
+        allowed = TICKET_STATUS_TRANSITIONS.get(cur_status or "new", set())
+        if fields["status"] not in allowed:
+            raise HTTPException(
+                422,
+                f"Transition {cur_status!r} → {fields['status']!r} not allowed",
+            )
+
+    # Resolve foreign keys
+    if "problem_id" in fields:
+        pu = await resolve_problem_uuid(session, fields["problem_id"])
+        if not pu:
+            raise HTTPException(404, "PROBLEM_NOT_FOUND")
+        fields["problem_id"] = str(pu)
+
+    if "task_id" in fields:
+        tk = await resolve_task_uuid(session, fields["task_id"])
+        if not tk:
+            raise HTTPException(404, "TASK_NOT_FOUND")
+        fields["task_id"] = str(tk)
+
+    if "duplicate_of" in fields:
+        du = await resolve_ticket_uuid(session, fields["duplicate_of"])
+        if not du:
+            raise HTTPException(404, "DUPLICATE_OF_NOT_FOUND")
+        fields["duplicate_of"] = str(du)
+
+    if "assigned_to" in fields:
+        fields["assigned_to"] = fields["assigned_to"]  # kept as string for CAST
+
+    set_parts: list[str] = []
+    params: dict = {"id": str(tu)}
+    uuid_fields = {"problem_id", "task_id", "duplicate_of", "assigned_to"}
+    for k, v in fields.items():
+        if k in uuid_fields:
+            set_parts.append(f"{k} = CAST(:{k} AS uuid)")
+        else:
+            set_parts.append(f"{k} = :{k}")
+        params[k] = v
+
+    set_parts.append("updated_at = NOW()")
+    if "recommendation_sent" in fields and fields["recommendation_sent"]:
+        set_parts.append("recommendation_sent_at = NOW()")
+
+    await session.execute(
+        text(f"UPDATE support_tickets SET {', '.join(set_parts)} WHERE id = CAST(:id AS uuid)"),
+        params,
+    )
+    await session.commit()
+    return {"data": {"uuid": str(tu), "updated": True}}
+
+
 @router.get("/{identifier}")
 async def get_ticket(identifier: str, session: AsyncSession = Depends(get_db)):
     tu = await resolve_ticket_uuid(session, identifier)
@@ -267,3 +534,146 @@ async def get_ticket(identifier: str, session: AsyncSession = Depends(get_db)):
     base["queue_item"] = dict(qrow) if qrow else None
     base["ai_suggestions"] = ai_suggestions
     return {"data": base}
+
+
+# ---------------------------------------------------------------------------
+# POST /{identifier}/attachments — upload file
+# ---------------------------------------------------------------------------
+
+@router.get("/{identifier}/comments")
+async def ticket_comments(
+    identifier: str,
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+):
+    tu = await resolve_ticket_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "NOT_FOUND")
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.id::text, c.body, c.is_internal,"
+                "       c.parent_id::text, c.created_at,"
+                "       COALESCE(NULLIF(trim(u.name), ''), split_part(u.email, '@', 1)) AS author_name,"
+                "       c.author_id::text"
+                " FROM comments c"
+                " LEFT JOIN users u ON u.id = c.author_id"
+                " WHERE c.entity_type = 'ticket' AND c.entity_id = CAST(:tid AS uuid)"
+                " ORDER BY c.created_at ASC LIMIT :lim"
+            ),
+            {"tid": str(tu), "lim": limit},
+        )
+    ).mappings().all()
+    items = [
+        {
+            "id": d["id"],
+            "body": d["body"],
+            "is_internal": d["is_internal"],
+            "parent_id": d.get("parent_id"),
+            "author_id": d["author_id"],
+            "author_name": d.get("author_name"),
+            "created_at": d["created_at"].isoformat() if d["created_at"] else None,
+        }
+        for d in (dict(r) for r in rows)
+    ]
+    return {"data": items, "meta": {"total": len(items)}}
+
+
+@router.post("/{identifier}/comments", status_code=201, dependencies=[Depends(require_api_key)])
+async def add_ticket_comment(
+    identifier: str, body: CommentCreate, session: AsyncSession = Depends(get_db)
+):
+    tu = await resolve_ticket_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "NOT_FOUND")
+    r = await session.execute(
+        text(
+            "INSERT INTO comments"
+            " (entity_type, entity_id, author_id, parent_id, body, is_internal)"
+            " VALUES"
+            " ('ticket', CAST(:entity_id AS uuid), CAST(:author_id AS uuid),"
+            "  CAST(:parent_id AS uuid), :body, :is_internal)"
+            " RETURNING id::text, created_at"
+        ),
+        {
+            "entity_id": str(tu),
+            "author_id": body.author_id,
+            "parent_id": body.parent_id,
+            "body": body.body,
+            "is_internal": body.is_internal,
+        },
+    )
+    row = r.fetchone()
+    await session.commit()
+    return {
+        "data": {
+            "id": row[0],
+            "entity_id": str(tu),
+            "body": body.body,
+            "is_internal": body.is_internal,
+            "created_at": row[1].isoformat() if row[1] else None,
+        }
+    }
+
+
+@router.post("/{identifier}/attachments", status_code=201, dependencies=[Depends(require_api_key)])
+async def upload_attachment(
+    identifier: str,
+    session: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+    is_log: bool = Form(False),
+    is_screenshot: bool = Form(False),
+    uploaded_by: str | None = Form(None),
+):
+    tu = await resolve_ticket_uuid(session, identifier)
+    if not tu:
+        raise HTTPException(404, "NOT_FOUND")
+
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(413, "FILE_TOO_LARGE")
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    file_id = str(_uuid.uuid4())
+    ext = os.path.splitext(file.filename or "")[1]
+    s3_key = f"tickets/{str(tu)}/{file_id}{ext}"
+    local_path = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
+
+    contents = await file.read()
+    with open(local_path, "wb") as fh:
+        fh.write(contents)
+
+    r = await session.execute(
+        text(
+            "INSERT INTO attachments"
+            " (ticket_id, file_name, file_type, file_size, s3_key, is_log, is_screenshot, uploaded_by)"
+            " VALUES"
+            " (CAST(:tid AS uuid), :file_name, :file_type, :file_size, :s3_key,"
+            "  :is_log, :is_screenshot, CAST(:uploaded_by AS uuid))"
+            " RETURNING id::text, created_at"
+        ),
+        {
+            "tid": str(tu),
+            "file_name": file.filename,
+            "file_type": file.content_type,
+            "file_size": len(contents),
+            "s3_key": s3_key,
+            "is_log": is_log,
+            "is_screenshot": is_screenshot,
+            "uploaded_by": uploaded_by,
+        },
+    )
+    row = r.fetchone()
+    await session.commit()
+    return {
+        "data": {
+            "id": row[0],
+            "ticket_uuid": str(tu),
+            "file_name": file.filename,
+            "file_type": file.content_type,
+            "file_size": len(contents),
+            "is_log": is_log,
+            "is_screenshot": is_screenshot,
+            "url_stub": f"/attachments/{row[0]}",
+            "created_at": row[1].isoformat() if row[1] else None,
+        }
+    }

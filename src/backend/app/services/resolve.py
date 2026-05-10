@@ -1,3 +1,10 @@
+"""
+Resolve helpers: принимают identifier (UUID-строка или human-readable short_id вида PRB-218,
+BUG-42, TKT-1001) и возвращают внутренний UUID объекта или None если не найден.
+
+Используется во всех endpoint-ах, которые принимают {identifier} в пути — это позволяет
+и фронтенду, и внешним клиентам обращаться по удобному short_id без знания UUID.
+"""
 from __future__ import annotations
 
 import uuid

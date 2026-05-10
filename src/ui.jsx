@@ -1,5 +1,19 @@
-/* VECTOR — icons + atoms.
-   All icons are 16x16 line, currentColor stroke. */
+/* VECTOR — icons + atomic UI components.
+   All icons are 16×16 line SVG, currentColor stroke.
+
+   Компоненты:
+     Icons.*       — иконки (все через <Icon> обёртку)
+     Avatar        — аватар пользователя по user-id; фоллбэк «·» для неизвестных
+     AvatarStack   — горизонтальный ряд аватаров с +N
+     Badge         — цветной лейбл; tone: mute|info|high|critical|ok|warning|med|low
+     StatusBadge   — Badge по STATUS_LABELS (triage, in-progress, ...)
+     PriorityBadge — Badge по PRIO_LABELS (P0–P3)
+     SeverityBadge — Badge по SEV_LABELS (critical/high/medium/low)
+     Btn           — кнопка; props: primary|ghost|tone("ok"|"critical") + icon + kbd
+     Delta         — «+12%» / «−5%» со стрелкой и цветом
+     Sparkline     — SVG мини-график для трендов
+     HealthBar     — горизонтальный прогресс-бар (0–1)
+*/
 
 const Icon = ({ d, size = 16, fill = "none", stroke = "currentColor", strokeWidth = 1.5, children, ...rest }) => (
   <svg className="ico" width={size} height={size} viewBox="0 0 16 16" fill={fill}
@@ -128,8 +142,8 @@ const Sparkline = ({ data = [], w = 100, h = 26, accent, fill = true }) => {
 const Kbd = ({ children }) => <span className="kbd">{children}</span>;
 
 /* ─── Btn ─── */
-const Btn = ({ icon, primary, ghost, kbd, children, ...p }) => (
-  <button className={`btn ${primary?"btn-primary":""} ${ghost?"btn-ghost":""}`} {...p}>
+const Btn = ({ icon, primary, ghost, tone, kbd, children, ...p }) => (
+  <button className={`btn ${primary?"btn-primary":""} ${ghost?"btn-ghost":""} ${tone?`btn-${tone}`:""}`} {...p}>
     {icon ? icon : null}
     {children}
     {kbd && <Kbd>{kbd}</Kbd>}

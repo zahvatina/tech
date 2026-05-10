@@ -5,25 +5,57 @@
 const sumBy = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
 
 const Dashboard = ({ go }) => {
-  const total = PROBLEMS;
-  const totalTickets = sumBy(total, p => p.tickets);
-  const totalUntriaged = sumBy(total, p => p.untriaged);
-  const totalNoBug = sumBy(total, p => p.ticketsNoBug);
-  const open = total.filter(p => p.status !== "resolved").length;
+  const [problems, setProblems] = React.useState(PROBLEMS);
+  const [summary, setSummary] = React.useState(null);
+  const [heatData, setHeatData] = React.useState(null);
+  const [noWorkaround, setNoWorkaround] = React.useState([]);
+  const [teamLoad, setTeamLoad] = React.useState([]);
+
+  React.useEffect(() => {
+    API.problems.list({ limit: 100 })
+      .then(res => setProblems(res.data))
+      .catch(() => setProblems(PROBLEMS));
+    API.dashboard.summary()
+      .then(d => setSummary(d))
+      .catch(() => {});
+    API.dashboard.heatmap()
+      .then(d => setHeatData(d))
+      .catch(() => {});
+    API.tasks.listAll({ has_workaround: false, limit: 4 })
+      .then(data => setNoWorkaround(data))
+      .catch(() => setNoWorkaround(BUGS.filter(b => !b.workaround).slice(0, 4)));
+    API.dashboard.teamLoad()
+      .then(data => setTeamLoad(data))
+      .catch(() => {});
+  }, []);
+
+  const total = problems;
+  // Prefer dashboard/summary KPIs; fall back to computed from problems list
+  const open          = summary ? summary.total_open_problems : total.filter(p => p.status !== "resolved").length;
+  const totalTickets  = summary ? (summary.total_tickets_week || summary.total_tickets_7d || 0) : sumBy(total, p => p.tickets);
+  const totalUntriaged = summary ? summary.unresearched_total : sumBy(total, p => p.untriaged);
+  const totalNoBug    = sumBy(total, p => p.ticketsNoBug);
+  const slaBreached   = summary ? summary.sla_breached : 0;
+  const ticketsDeltaPct = summary ? (summary.tickets_delta_pct_wow || 0) / 100 : 0.21;
+
   const hot = [...total].sort((a, b) => b.ticketsDelta - a.ticketsDelta).slice(0, 5);
   const queue = [...total].sort((a, b) => b.untriaged - a.untriaged).slice(0, 5);
   const noBugLeaders = [...total].filter(p => p.ticketsNoBug > 0).sort((a,b) => b.ticketsNoBug - a.ticketsNoBug).slice(0,4);
-  const noWorkaround = BUGS.filter(b => !b.workaround || b.workaround.length < 5).slice(0,4); // none in mock; fall back below
 
-  // Build heat data 7d × 24h based on PROBLEMS.trend
-  const heat = [];
-  for (let r = 0; r < 7; r++) {
-    for (let c = 0; c < 28; c++) {
-      const v = (Math.sin(c*0.6 + r) + Math.cos(r*0.9 + c*0.2)) * 0.5 + 0.5;
-      const lvl = v > 0.85 ? 4 : v > 0.7 ? 3 : v > 0.55 ? 2 : v > 0.4 ? 1 : 0;
-      heat.push(lvl);
+  // Heatmap: use API levels_ui_28x7 if available, else compute from problems
+  const heat = React.useMemo(() => {
+    if (heatData && (heatData.levels_ui_28x7 || heatData.grid)) {
+      return heatData.levels_ui_28x7 || heatData.grid;
     }
-  }
+    const arr = [];
+    for (let r = 0; r < 7; r++) {
+      for (let c = 0; c < 28; c++) {
+        const v = (Math.sin(c*0.6 + r) + Math.cos(r*0.9 + c*0.2)) * 0.5 + 0.5;
+        arr.push(v > 0.85 ? 4 : v > 0.7 ? 3 : v > 0.55 ? 2 : v > 0.4 ? 1 : 0);
+      }
+    }
+    return arr;
+  }, [heatData]);
 
   return (
     <div className="page">
@@ -44,14 +76,15 @@ const Dashboard = ({ go }) => {
       <div className="page-body">
         {/* Hot KPIs */}
         <div className="grid-4">
-          <KpiCard label="Открытых проблем" value={open} delta={+0.06} sub={`${total.length} всего`}
+          <KpiCard label="Открытых проблем" value={open} delta={summary ? null : +0.06} sub={`${total.length} всего`}
                    spark={[12,14,12,15,17,19,21,22,24,26,27,28]} />
-          <KpiCard label="Обращений / 7д"   value={totalTickets.toLocaleString("ru-RU")} delta={+0.21}
+          <KpiCard label="Обращений / 7д"   value={(typeof totalTickets === "number" ? totalTickets : 0).toLocaleString("ru-RU")}
+                   delta={ticketsDeltaPct > 1000 ? null : ticketsDeltaPct}
                    sub="vs прошлая неделя" critical
                    spark={[180,210,260,310,290,330,360,420,460,510,560,610]} />
-          <KpiCard label="Неразобранных"    value={totalUntriaged}  delta={+0.34} sub="требуют triage" critical
+          <KpiCard label="Неразобранных"    value={totalUntriaged} delta={summary ? null : +0.34} sub="требуют triage" critical
                    spark={[18,22,28,30,34,40,46,52,60,68,72,78]} />
-          <KpiCard label="Без привязки к багу" value={totalNoBug} delta={+0.18} sub={`в ${noBugLeaders.length} проблемах`}
+          <KpiCard label="SLA нарушений" value={slaBreached} delta={summary ? null : 0} sub="активных очередей"
                    spark={[24,28,30,34,38,42,40,44,48,52,56,60]} />
         </div>
 
@@ -245,20 +278,24 @@ const Dashboard = ({ go }) => {
               <div className="ttl"><Icons.team/>Нагрузка по командам</div>
             </div>
             <div className="card-bd col" style={{ gap: 10 }}>
-              {[
-                { team: "Payments", load: 0.92, prob: 1, bugs: 3, owner: "u4" },
-                { team: "Mobile Core", load: 0.78, prob: 2, bugs: 4, owner: "u1" },
-                { team: "Document Hub", load: 0.61, prob: 2, bugs: 2, owner: "u2" },
-                { team: "Auth & Identity", load: 0.55, prob: 1, bugs: 1, owner: "u5" },
-                { team: "Web Platform", load: 0.42, prob: 1, bugs: 1, owner: "u2" },
-              ].map(t => (
-                <div key={t.team} className="row" style={{ alignItems: "center" }}>
-                  <span style={{ width: 130, fontSize: 12.5 }}>{t.team}</span>
-                  <div className="bar grow"><span style={{ width: `${t.load*100}%`, background: t.load>0.85?"var(--critical)":t.load>0.7?"var(--high)":"var(--accent)" }}/></div>
-                  <span className="faint" style={{ font: "500 11px var(--mono)", width: 50, textAlign: "right" }}>{t.prob}p · {t.bugs}b</span>
-                  <Avatar user={t.owner} size="sm"/>
-                </div>
-              ))}
+              {(teamLoad.length > 0 ? teamLoad : [
+                { team: "Payments",        prob: 1, bugs: 3, load: 0.92 },
+                { team: "Mobile Core",     prob: 2, bugs: 4, load: 0.78 },
+                { team: "Document Hub",    prob: 2, bugs: 2, load: 0.61 },
+                { team: "Auth & Identity", prob: 1, bugs: 1, load: 0.55 },
+                { team: "Web Platform",    prob: 1, bugs: 1, load: 0.42 },
+              ]).slice(0, 5).map(t => {
+                const load = Math.min(t.load || 0, 1);
+                return (
+                  <div key={t.team} className="row" style={{ alignItems: "center" }}>
+                    <span style={{ width: 130, fontSize: 12.5 }}>{t.team}</span>
+                    <div className="bar grow"><span style={{ width: `${load*100}%`, background: load>0.85?"var(--critical)":load>0.7?"var(--high)":"var(--accent)" }}/></div>
+                    <span className="faint" style={{ font: "500 11px var(--mono)", width: 55, textAlign: "right" }}>
+                      {t.prob}p · {t.bugs}b
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

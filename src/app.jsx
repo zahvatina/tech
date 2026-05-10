@@ -1,4 +1,19 @@
-/* VECTOR — App entry, route state, tweaks panel wiring */
+/* VECTOR — App entry, route state, tweaks panel wiring
+
+   Роутинг полностью клиентский (SPA), без URL — только state:
+     route = { view, detailId, tab, focus }
+
+   Маршруты (view):
+     dashboard  — операционный дашборд
+     problems   — список проблем; detailId → ProblemDetail с табами
+     triage     — очередь problem_determination
+     bugs       — список задач/багов
+     tickets    — список тикетов
+     rmo        — РМО-пространство команды (pending confirmation)
+     products / teams / insights — скелеты разделов
+
+   go(next) — переход: мержит next в текущий route; tab/focus сбрасываются если не указаны.
+   Горячие клавиши: g+d (dashboard), g+p (problems), g+t (triage), g+b (bugs). */
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "dark",
@@ -54,6 +69,7 @@ function App() {
   else if (route.view === "triage") content = <Triage go={go}/>;
   else if (route.view === "bugs") content = <BugsList go={go}/>;
   else if (route.view === "tickets") content = <TicketsList go={go}/>;
+  else if (route.view === "rmo") content = <RmoSpace go={go}/>;
   else content = <Stub title={route.view} sub="Скелет раздела"/>;
 
   return (
