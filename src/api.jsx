@@ -314,6 +314,21 @@ const API = {
       return res.data || [];
     },
   },
+
+  notifications: {
+    async list(params = {}) {
+      const res = await apiFetch(`/api/v1/notifications${buildQS(params)}`);
+      return { data: res.data || [], meta: res.meta || {} };
+    },
+    async markAllRead(params = {}) {
+      const resp = await fetch(`${API_BASE}/api/v1/notifications/read-all${buildQS(params)}`, {
+        method: "PATCH",
+        headers: { "X-API-Key": API_KEY },
+      });
+      if (!resp.ok && resp.status !== 204) throw new Error(`HTTP ${resp.status}`);
+      return null;
+    },
+  },
 };
 
 Object.assign(window, { API });
